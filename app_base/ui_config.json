@@ -1,428 +1,487 @@
 {
-  "titulo_pagina": "Online Retail — Dashboard Corporativo",
-  "brand_name": "Online Retail",
-  "brand_sub": "Dashboard Corporativo de Ventas",
-  "brand_icon": "dashboard",
+  "titulo_pagina": "Online Retail | Corporate Analytics",
+  "brand_name": "ONLINE RETAIL",
+  "brand_sub": "Corporate Sales Intelligence",
+  "brand_icon": "corporate_fare",
+  "sidebar_disclaimer": "Uso interno · Información confidencial",
+  "footer": "Online Retail Corporate Analytics · Datos Dic 2010 – Dic 2011 · Fuente: Online Retail Dataset",
   "column_mapping": {
-    "sales_fecha": "InvoiceDate",
-    "sales_cantidad": "Quantity",
-    "sales_invoice": "InvoiceNo",
-    "inventory_producto": "Description",
-    "inventory_sku": "StockCode",
-    "inventory_precio": "UnitPrice",
-    "customers_id": "CustomerID"
+    "date": "InvoiceDate",
+    "quantity": "Quantity",
+    "price": "UnitPrice",
+    "country": "Country",
+    "customer": "CustomerID",
+    "product": "Description",
+    "stock": "StockCode",
+    "invoice": "InvoiceNo"
   },
   "filtros_globales": [
     {
-      "id": "fecha_rango",
-      "label": "Período",
-      "nombre": "InvoiceDate",
-      "tabla": "online_retail",
-      "tipo": "date_range",
+      "nombre": "date_range",
+      "etiqueta": "Rango de Fechas",
       "columna": "InvoiceDate",
-      "placeholder": "Seleccionar rango de fechas"
+      "tabla": "online_retail",
+      "tipo": "date_range"
     },
     {
-      "id": "pais",
-      "label": "País",
-      "nombre": "Country",
+      "nombre": "country",
+      "etiqueta": "País",
+      "columna": "Country",
       "tabla": "online_retail",
       "tipo": "multiselect",
-      "columna": "Country",
-      "placeholder": "Todos los países"
+      "todos_label": "Todos los países"
     }
   ],
+  "empty_state": {
+    "title": "Sin datos disponibles",
+    "description": "Ajuste los filtros para ver los resultados del análisis."
+  },
   "modulos": [
     {
-      "id": "ventas",
-      "nombre": "Ventas",
+      "id": "overview",
+      "nombre": "Resumen Ejecutivo",
       "icono": "📊",
-      "descripcion": "Resumen ejecutivo de ventas, ingresos y tendencias del negocio.",
-      "material_icon": "bar_chart",
-      "breadcrumbs": "HOME  /  VENTAS",
+      "descripcion": "Indicadores clave y desempeño global del negocio",
+      "material_icon": "dashboard",
+      "breadcrumbs": "HOME  /  RESUMEN EJECUTIVO",
       "kpis": [
         {
-          "icono": "attach_money",
-          "label": "Ingresos Totales",
-          "sql": "SELECT COALESCE(SUM(\"Quantity\" * \"UnitPrice\"), 0) AS v FROM online_retail",
+          "icono": "payments",
+          "label": "Revenue Total",
+          "sql": "SELECT ROUND(SUM(Quantity * UnitPrice), 2) AS v FROM online_retail",
           "formato": "money",
-          "color": "#246bfd"
+          "color": "#0f3a5f",
+          "sub_label": "Ingresos acumulados"
         },
         {
-          "icono": "shopping_cart",
-          "label": "Transacciones",
-          "sql": "SELECT COUNT(DISTINCT \"InvoiceNo\") AS v FROM online_retail",
-          "formato": "int",
-          "color": "#12b76a"
-        },
-        {
-          "icono": "local_shipping",
+          "icono": "inventory_2",
           "label": "Unidades Vendidas",
-          "sql": "SELECT COALESCE(SUM(\"Quantity\"), 0) AS v FROM online_retail",
+          "sql": "SELECT SUM(Quantity) AS v FROM online_retail",
           "formato": "int",
-          "color": "#f59e0b"
+          "color": "#0e7a5f",
+          "sub_label": "Cantidad total"
+        },
+        {
+          "icono": "receipt_long",
+          "label": "Transacciones",
+          "sql": "SELECT COUNT(DISTINCT InvoiceNo) AS v FROM online_retail",
+          "formato": "int",
+          "color": "#7c3aed",
+          "sub_label": "Facturas únicas"
         },
         {
           "icono": "group",
           "label": "Clientes Activos",
-          "sql": "SELECT COUNT(DISTINCT \"CustomerID\") AS v FROM online_retail",
+          "sql": "SELECT COUNT(DISTINCT CustomerID) AS v FROM online_retail",
           "formato": "int",
-          "color": "#8b5cf6"
+          "color": "#246bfd",
+          "sub_label": "Clientes únicos"
+        },
+        {
+          "icono": "inventory",
+          "label": "Productos Activos",
+          "sql": "SELECT COUNT(DISTINCT StockCode) AS v FROM online_retail",
+          "formato": "int",
+          "color": "#c2410c",
+          "sub_label": "SKUs en catálogo"
+        },
+        {
+          "icono": "public",
+          "label": "Países",
+          "sql": "SELECT COUNT(DISTINCT Country) AS v FROM online_retail",
+          "formato": "int",
+          "color": "#b45309",
+          "sub_label": "Mercados activos"
         }
       ],
       "graficos": [
         {
-          "titulo": "Ingresos Mensuales",
-          "sub": "Evolución de ingresos a lo largo del tiempo",
+          "tipo": "line",
+          "titulo": "Tendencia Mensual de Revenue",
+          "sub": "Evolución de ingresos por mes",
           "icono": "show_chart",
-          "tipo": "line",
-          "alto": 350,
-          "sql": "SELECT strftime(\"InvoiceDate\", '%Y-%m') AS mes, SUM(\"Quantity\" * \"UnitPrice\") AS ingresos FROM online_retail GROUP BY mes ORDER BY mes",
-          "x": "mes",
-          "y": "ingresos",
-          "color": "#246bfd"
+          "sql": "SELECT strftime('%Y-%m', InvoiceDate) AS Mes, ROUND(SUM(Quantity * UnitPrice), 2) AS Revenue FROM online_retail GROUP BY Mes ORDER BY Mes",
+          "x": "Mes",
+          "y": "Revenue",
+          "alto": 340,
+          "col_izq": 7
         },
         {
-          "titulo": "Unidades Vendidas por Mes",
-          "sub": "Volumen de unidades mensuales",
-          "icono": "trending_up",
-          "tipo": "bar",
-          "alto": 350,
-          "sql": "SELECT strftime(\"InvoiceDate\", '%Y-%m') AS mes, SUM(\"Quantity\") AS unidades FROM online_retail GROUP BY mes ORDER BY mes",
-          "x": "mes",
-          "y": "unidades",
-          "color": "#12b76a"
-        },
-        {
-          "titulo": "Top 10 Países por Ingresos",
-          "sub": "Distribución de ingresos por mercado",
-          "icono": "public",
-          "tipo": "bar",
-          "alto": 400,
-          "sql": "SELECT \"Country\", SUM(\"Quantity\" * \"UnitPrice\") AS ingresos FROM online_retail GROUP BY \"Country\" ORDER BY ingresos DESC LIMIT 10",
-          "x": "Country",
-          "y": "ingresos",
-          "color": "#f59e0b"
-        },
-        {
-          "titulo": "Distribución de Ingresos por País",
-          "sub": "Participación de cada país en los ingresos totales",
-          "icono": "donut_large",
           "tipo": "pie",
-          "alto": 400,
-          "sql": "SELECT \"Country\", SUM(\"Quantity\" * \"UnitPrice\") AS ingresos FROM online_retail GROUP BY \"Country\" ORDER BY ingresos DESC LIMIT 10",
+          "titulo": "Revenue por País (Top 10)",
+          "sub": "Participación de los principales mercados",
+          "icono": "donut_small",
+          "sql": "SELECT Country, ROUND(SUM(Quantity * UnitPrice), 2) AS Revenue FROM online_retail GROUP BY Country ORDER BY Revenue DESC LIMIT 10",
           "columna": "Country",
-          "valores": "ingresos"
+          "valores": "Revenue",
+          "alto": 340,
+          "col_izq": 5
         },
         {
-          "titulo": "Ticket Promedio Diario",
-          "sub": "Valor promedio por transacción cada día",
-          "icono": "calendar_today",
-          "tipo": "line",
-          "alto": 300,
-          "sql": "SELECT DATE(\"InvoiceDate\") AS dia, AVG(\"Quantity\" * \"UnitPrice\") AS ticket_promedio FROM online_retail GROUP BY dia ORDER BY dia",
-          "x": "dia",
-          "y": "ticket_promedio",
-          "color": "#8b5cf6"
-        }
-      ],
-      "tablas": [
+          "tipo": "bar",
+          "titulo": "Unidades por Mes",
+          "sub": "Volumen de unidades vendidas mensualmente",
+          "icono": "bar_chart",
+          "sql": "SELECT strftime('%Y-%m', InvoiceDate) AS Mes, SUM(Quantity) AS Unidades FROM online_retail GROUP BY Mes ORDER BY Mes",
+          "x": "Mes",
+          "y": "Unidades",
+          "alto": 320,
+          "col_izq": 6
+        },
         {
-          "titulo": "Resumen Mensual de Ventas",
-          "sub": "Detalle mensual de transacciones, unidades e ingresos",
-          "icono": "table_chart",
-          "limite": 24,
-          "altura": 400,
-          "sql": "SELECT strftime(\"InvoiceDate\", '%Y-%m') AS Mes, COUNT(DISTINCT \"InvoiceNo\") AS Transacciones, SUM(\"Quantity\") AS Unidades, ROUND(SUM(\"Quantity\" * \"UnitPrice\"), 2) AS Ingresos FROM online_retail GROUP BY Mes ORDER BY Mes DESC"
+          "tipo": "bar",
+          "titulo": "Transacciones por Mes",
+          "sub": "Número de facturas mensuales",
+          "icono": "receipt_long",
+          "sql": "SELECT strftime('%Y-%m', InvoiceDate) AS Mes, COUNT(DISTINCT InvoiceNo) AS Transacciones FROM online_retail GROUP BY Mes ORDER BY Mes",
+          "x": "Mes",
+          "y": "Transacciones",
+          "alto": 320,
+          "col_izq": 6
         }
       ]
     },
     {
-      "id": "productos",
+      "id": "countries",
+      "nombre": "Países y Mercados",
+      "icono": "🌍",
+      "descripcion": "Distribución territorial y análisis por mercado internacional",
+      "material_icon": "public",
+      "breadcrumbs": "HOME  /  PAÍSES Y MERCADOS",
+      "kpis": [
+        {
+          "icono": "public",
+          "label": "Países Activos",
+          "sql": "SELECT COUNT(DISTINCT Country) AS v FROM online_retail",
+          "formato": "int",
+          "color": "#0f3a5f",
+          "sub_label": "Mercados internacionales"
+        },
+        {
+          "icono": "location_on",
+          "label": "Principal Mercado",
+          "sql": "SELECT Country AS v FROM online_retail GROUP BY Country ORDER BY SUM(Quantity * UnitPrice) DESC LIMIT 1",
+          "formato": "str",
+          "color": "#0e7a5f",
+          "sub_label": "Mayor revenue"
+        },
+        {
+          "icono": "group",
+          "label": "Clientes Internacionales",
+          "sql": "SELECT COUNT(DISTINCT CustomerID) AS v FROM online_retail WHERE Country != 'United Kingdom'",
+          "formato": "int",
+          "color": "#246bfd",
+          "sub_label": "Fuera del Reino Unido"
+        },
+        {
+          "icono": "trending_up",
+          "label": "Revenue UK",
+          "sql": "SELECT ROUND(SUM(Quantity * UnitPrice), 2) AS v FROM online_retail WHERE Country = 'United Kingdom'",
+          "formato": "money",
+          "color": "#7c3aed",
+          "sub_label": "Reino Unido"
+        }
+      ],
+      "graficos": [
+        {
+          "tipo": "bar_h",
+          "titulo": "Top 15 Países por Revenue",
+          "sub": "Ranking de mercados internacionales",
+          "icono": "leaderboard",
+          "sql": "SELECT Country, ROUND(SUM(Quantity * UnitPrice), 2) AS Revenue FROM online_retail GROUP BY Country ORDER BY Revenue DESC LIMIT 15",
+          "x": "Revenue",
+          "y": "Country",
+          "alto": 460,
+          "col_izq": 7
+        },
+        {
+          "tipo": "bar_h",
+          "titulo": "Top 15 Países por Unidades",
+          "sub": "Volumen de unidades por mercado",
+          "icono": "inventory_2",
+          "sql": "SELECT Country, SUM(Quantity) AS Unidades FROM online_retail GROUP BY Country ORDER BY Unidades DESC LIMIT 15",
+          "x": "Unidades",
+          "y": "Country",
+          "alto": 460,
+          "col_izq": 5
+        },
+        {
+          "tipo": "bar",
+          "titulo": "Clientes por País (Top 10)",
+          "sub": "Distribución de clientes por mercado",
+          "icono": "group",
+          "sql": "SELECT Country, COUNT(DISTINCT CustomerID) AS Clientes FROM online_retail GROUP BY Country ORDER BY Clientes DESC LIMIT 10",
+          "x": "Country",
+          "y": "Clientes",
+          "alto": 340
+        }
+      ],
+      "tablas": [
+        {
+          "titulo": "Detalle por País",
+          "sub": "Métricas completas por mercado internacional",
+          "icono": "table_chart",
+          "sql": "SELECT Country, COUNT(DISTINCT InvoiceNo) AS Transacciones, COUNT(DISTINCT CustomerID) AS Clientes, SUM(Quantity) AS Unidades, ROUND(SUM(Quantity * UnitPrice), 2) AS Revenue, ROUND(AVG(UnitPrice), 2) AS PrecioPromedio FROM online_retail GROUP BY Country ORDER BY Revenue DESC",
+          "limite": 38
+        }
+      ]
+    },
+    {
+      "id": "products",
       "nombre": "Productos",
       "icono": "📦",
-      "descripcion": "Análisis de productos más vendidos, rentabilidad y rendimiento del catálogo.",
+      "descripcion": "Análisis de catálogo, productos estrella y rendimiento",
       "material_icon": "inventory_2",
       "breadcrumbs": "HOME  /  PRODUCTOS",
       "kpis": [
         {
           "icono": "category",
           "label": "Productos Únicos",
-          "sql": "SELECT COUNT(DISTINCT \"Description\") AS v FROM online_retail",
+          "sql": "SELECT COUNT(DISTINCT StockCode) AS v FROM online_retail",
           "formato": "int",
-          "color": "#246bfd"
+          "color": "#0f3a5f",
+          "sub_label": "SKUs en catálogo"
         },
         {
-          "icono": "stars",
-          "label": "Precio Unitario Promedio",
-          "sql": "SELECT ROUND(AVG(\"UnitPrice\"), 2) AS v FROM online_retail",
+          "icono": "attach_money",
+          "label": "Precio Promedio",
+          "sql": "SELECT ROUND(AVG(UnitPrice), 2) AS v FROM online_retail",
           "formato": "money",
-          "color": "#12b76a"
+          "color": "#246bfd",
+          "sub_label": "Precio unitario medio"
+        },
+        {
+          "icono": "trending_up",
+          "label": "Mejor Producto",
+          "sql": "SELECT Description AS v FROM online_retail WHERE Description IS NOT NULL AND Description != '' GROUP BY Description ORDER BY SUM(Quantity * UnitPrice) DESC LIMIT 1",
+          "formato": "str",
+          "color": "#0e7a5f",
+          "sub_label": "Mayor revenue"
         },
         {
           "icono": "local_shipping",
-          "label": "Cantidad Promedio por Línea",
-          "sql": "SELECT ROUND(AVG(\"Quantity\"), 1) AS v FROM online_retail",
+          "label": "Max. Unidades/Línea",
+          "sql": "SELECT MAX(Quantity) AS v FROM online_retail",
           "formato": "int",
-          "color": "#f59e0b"
-        },
-        {
-          "icono": "warning",
-          "label": "Devoluciones",
-          "sql": "SELECT COUNT(*) AS v FROM online_retail WHERE \"Quantity\" < 0",
-          "formato": "int",
-          "sub_label": "líneas con cantidad negativa",
-          "color": "#ef4444"
+          "color": "#c2410c",
+          "sub_label": "Mayor cantidad en una línea"
         }
       ],
       "graficos": [
         {
-          "titulo": "Top 15 Productos por Ingresos",
-          "sub": "Productos que generan más ingresos",
-          "icono": "emoji_events",
-          "tipo": "bar",
-          "alto": 450,
-          "sql": "SELECT \"Description\", SUM(\"Quantity\" * \"UnitPrice\") AS ingresos FROM online_retail WHERE \"Quantity\" > 0 GROUP BY \"Description\" ORDER BY ingresos DESC LIMIT 15",
-          "x": "Description",
-          "y": "ingresos",
-          "color": "#246bfd"
+          "tipo": "bar_h",
+          "titulo": "Top 15 Productos por Revenue",
+          "sub": "Productos con mayor facturación",
+          "icono": "leaderboard",
+          "sql": "SELECT Description, ROUND(SUM(Quantity * UnitPrice), 2) AS Revenue FROM online_retail WHERE Description IS NOT NULL AND Description != '' GROUP BY Description ORDER BY Revenue DESC LIMIT 15",
+          "x": "Revenue",
+          "y": "Description",
+          "alto": 460,
+          "col_izq": 7
         },
         {
-          "titulo": "Top 15 Productos por Unidades Vendidas",
-          "sub": "Productos más populares por volumen",
-          "icono": "trending_up",
-          "tipo": "bar",
-          "alto": 450,
-          "sql": "SELECT \"Description\", SUM(\"Quantity\") AS unidades FROM online_retail WHERE \"Quantity\" > 0 GROUP BY \"Description\" ORDER BY unidades DESC LIMIT 15",
-          "x": "Description",
-          "y": "unidades",
-          "color": "#12b76a"
+          "tipo": "bar_h",
+          "titulo": "Top 15 Productos por Unidades",
+          "sub": "Productos más vendidos por volumen",
+          "icono": "inventory_2",
+          "sql": "SELECT Description, SUM(Quantity) AS Unidades FROM online_retail WHERE Description IS NOT NULL AND Description != '' GROUP BY Description ORDER BY Unidades DESC LIMIT 15",
+          "x": "Unidades",
+          "y": "Description",
+          "alto": 460,
+          "col_izq": 5
         },
         {
-          "titulo": "Distribución de Precios Unitarios",
-          "sub": "Histograma de precios de productos",
-          "icono": "bar_chart",
-          "tipo": "bar",
-          "alto": 350,
-          "sql": "SELECT CASE WHEN \"UnitPrice\" <= 2 THEN '≤ $2' WHEN \"UnitPrice\" <= 5 THEN '$2 - $5' WHEN \"UnitPrice\" <= 10 THEN '$5 - $10' WHEN \"UnitPrice\" <= 20 THEN '$10 - $20' WHEN \"UnitPrice\" <= 50 THEN '$20 - $50' ELSE '> $50' END AS rango_precio, COUNT(*) AS cantidad FROM online_retail GROUP BY rango_precio ORDER BY MIN(\"UnitPrice\")",
-          "x": "rango_precio",
-          "y": "cantidad",
-          "color": "#f59e0b"
-        },
-        {
-          "titulo": "Top 10 Productos por Margen Total",
-          "sub": "Ingresos totales por producto",
-          "icono": "pie_chart",
-          "tipo": "pie",
-          "alto": 400,
-          "sql": "SELECT \"Description\", SUM(\"Quantity\" * \"UnitPrice\") AS margen FROM online_retail WHERE \"Quantity\" > 0 GROUP BY \"Description\" ORDER BY margen DESC LIMIT 10",
-          "columna": "Description",
-          "valores": "margen"
+          "tipo": "line",
+          "titulo": "Revenue Mensual por País (Top 5)",
+          "sub": "Comparativo temporal de los principales mercados",
+          "icono": "show_chart",
+          "sql": "SELECT strftime('%Y-%m', InvoiceDate) AS Mes, Country, ROUND(SUM(Quantity * UnitPrice), 2) AS Revenue FROM online_retail WHERE Country IN (SELECT Country FROM online_retail GROUP BY Country ORDER BY SUM(Quantity * UnitPrice) DESC LIMIT 5) GROUP BY Mes, Country ORDER BY Mes",
+          "x": "Mes",
+          "y": "Revenue",
+          "group_by": "Country",
+          "alto": 380
         }
       ],
       "tablas": [
         {
-          "titulo": "Catálogo de Productos — Top Vendedores",
-          "sub": "Los productos con mayor rendimiento en ventas",
-          "icono": "table_chart",
-          "limite": 50,
-          "altura": 500,
-          "sql": "SELECT \"Description\" AS Producto, COUNT(DISTINCT \"InvoiceNo\") AS Facturas, SUM(\"Quantity\") AS Unidades_Vendidas, ROUND(AVG(\"UnitPrice\"), 2) AS Precio_Promedio, ROUND(SUM(\"Quantity\" * \"UnitPrice\"), 2) AS Ingresos_Totales FROM online_retail WHERE \"Quantity\" > 0 GROUP BY \"Description\" ORDER BY Ingresos_Totales DESC"
+          "titulo": "Top 20 Productos por Revenue",
+          "sub": "Los productos con mayor facturación total",
+          "icono": "emoji_events",
+          "sql": "SELECT Description AS Producto, StockCode AS Codigo, COUNT(DISTINCT InvoiceNo) AS Facturas, SUM(Quantity) AS Unidades, ROUND(AVG(UnitPrice), 2) AS PrecioPromedio, ROUND(SUM(Quantity * UnitPrice), 2) AS Revenue FROM online_retail WHERE Description IS NOT NULL AND Description != '' GROUP BY 1, 2 ORDER BY Revenue DESC",
+          "limite": 20
         }
       ]
     },
     {
-      "id": "clientes",
+      "id": "customers",
       "nombre": "Clientes",
       "icono": "👥",
-      "descripcion": "Análisis de comportamiento de clientes, valor y segmentación.",
-      "material_icon": "people",
+      "descripcion": "Análisis de comportamiento y valor de clientes",
+      "material_icon": "group",
       "breadcrumbs": "HOME  /  CLIENTES",
       "kpis": [
         {
-          "icono": "group",
-          "label": "Total Clientes",
-          "sql": "SELECT COUNT(DISTINCT \"CustomerID\") AS v FROM online_retail",
+          "icono": "groups",
+          "label": "Clientes Totales",
+          "sql": "SELECT COUNT(DISTINCT CustomerID) AS v FROM online_retail",
           "formato": "int",
-          "color": "#246bfd"
-        },
-        {
-          "icono": "person_add",
-          "label": "Clientes por País (Promedio)",
-          "sql": "SELECT ROUND(CAST(COUNT(DISTINCT \"CustomerID\") AS FLOAT) / NULLIF(COUNT(DISTINCT \"Country\"), 0), 0) AS v FROM online_retail",
-          "formato": "int",
-          "color": "#12b76a"
+          "color": "#0f3a5f",
+          "sub_label": "Cartera de clientes"
         },
         {
           "icono": "payments",
-          "label": "Ingreso Promedio por Cliente",
-          "sql": "SELECT ROUND(SUM(\"Quantity\" * \"UnitPrice\") / NULLIF(COUNT(DISTINCT \"CustomerID\"), 0), 2) AS v FROM online_retail",
+          "label": "Ticket Promedio",
+          "sql": "SELECT ROUND(AVG(line_total), 2) AS v FROM (SELECT InvoiceNo, SUM(Quantity * UnitPrice) AS line_total FROM online_retail GROUP BY InvoiceNo)",
           "formato": "money",
-          "color": "#f59e0b"
+          "color": "#246bfd",
+          "sub_label": "Revenue por factura"
         },
         {
-          "icono": "receipt_long",
-          "label": "Facturas por Cliente (Promedio)",
-          "sql": "SELECT ROUND(CAST(COUNT(DISTINCT \"InvoiceNo\") AS FLOAT) / NULLIF(COUNT(DISTINCT \"CustomerID\"), 0), 1) AS v FROM online_retail",
+          "icono": "star",
+          "label": "Mejor Cliente",
+          "sql": "SELECT CAST(CustomerID AS INTEGER) AS v FROM online_retail WHERE CustomerID IS NOT NULL GROUP BY CustomerID ORDER BY SUM(Quantity * UnitPrice) DESC LIMIT 1",
           "formato": "int",
-          "color": "#8b5cf6"
+          "color": "#0e7a5f",
+          "sub_label": "ID del cliente top"
+        },
+        {
+          "icono": "receipt",
+          "label": "Facturas/Cliente",
+          "sql": "SELECT ROUND(CAST(COUNT(DISTINCT InvoiceNo) AS FLOAT) / COUNT(DISTINCT CustomerID), 1) AS v FROM online_retail",
+          "formato": "float",
+          "color": "#7c3aed",
+          "sub_label": "Promedio de facturas"
         }
       ],
       "graficos": [
         {
-          "titulo": "Top 15 Clientes por Gasto Total",
-          "sub": "Clientes más valiosos del negocio",
-          "icono": "emoji_events",
           "tipo": "bar",
-          "alto": 450,
-          "sql": "SELECT \"CustomerID\", SUM(\"Quantity\" * \"UnitPrice\") AS gasto_total FROM online_retail GROUP BY \"CustomerID\" ORDER BY gasto_total DESC LIMIT 15",
-          "x": "CustomerID",
-          "y": "gasto_total",
-          "color": "#246bfd"
+          "titulo": "Top 15 Clientes por Revenue",
+          "sub": "Clientes con mayor gasto acumulado",
+          "icono": "leaderboard",
+          "sql": "SELECT CAST(CustomerID AS INTEGER) AS ClienteID, ROUND(SUM(Quantity * UnitPrice), 2) AS Revenue FROM online_retail WHERE CustomerID IS NOT NULL GROUP BY CustomerID ORDER BY Revenue DESC LIMIT 15",
+          "x": "ClienteID",
+          "y": "Revenue",
+          "alto": 380,
+          "col_izq": 7
         },
         {
-          "titulo": "Clientes por País",
-          "sub": "Distribución geográfica de la base de clientes",
-          "icono": "public",
           "tipo": "bar",
-          "alto": 400,
-          "sql": "SELECT \"Country\", COUNT(DISTINCT \"CustomerID\") AS clientes FROM online_retail GROUP BY \"Country\" ORDER BY clientes DESC LIMIT 15",
-          "x": "Country",
-          "y": "clientes",
-          "color": "#12b76a"
+          "titulo": "Top 15 Clientes por Facturas",
+          "sub": "Clientes más frecuentes",
+          "icono": "receipt_long",
+          "sql": "SELECT CAST(CustomerID AS INTEGER) AS ClienteID, COUNT(DISTINCT InvoiceNo) AS Facturas FROM online_retail WHERE CustomerID IS NOT NULL GROUP BY CustomerID ORDER BY Facturas DESC LIMIT 15",
+          "x": "ClienteID",
+          "y": "Facturas",
+          "alto": 380,
+          "col_izq": 5
         },
         {
-          "titulo": "Frecuencia de Compras por Cliente",
-          "sub": "Distribución del número de facturas por cliente",
-          "icono": "bar_chart",
-          "tipo": "bar",
-          "alto": 350,
-          "sql": "SELECT CASE WHEN num_facturas <= 5 THEN '1-5' WHEN num_facturas <= 20 THEN '6-20' WHEN num_facturas <= 50 THEN '21-50' WHEN num_facturas <= 100 THEN '51-100' ELSE '> 100' END AS rango, COUNT(*) AS clientes FROM (SELECT \"CustomerID\", COUNT(DISTINCT \"InvoiceNo\") AS num_facturas FROM online_retail GROUP BY \"CustomerID\") GROUP BY rango ORDER BY MIN(num_facturas)",
-          "x": "rango",
-          "y": "clientes",
-          "color": "#f59e0b"
-        },
-        {
-          "titulo": "Distribución Geográfica de Clientes",
-          "sub": "Participación de los principales mercados",
-          "icono": "donut_large",
-          "tipo": "pie",
-          "alto": 400,
-          "sql": "SELECT \"Country\", COUNT(DISTINCT \"CustomerID\") AS clientes FROM online_retail GROUP BY \"Country\" ORDER BY clientes DESC LIMIT 10",
-          "columna": "Country",
-          "valores": "clientes"
+          "tipo": "line",
+          "titulo": "Clientes Nuevos por Mes",
+          "sub": "Adquisición de clientes a lo del tiempo",
+          "icono": "show_chart",
+          "sql": "SELECT strftime('%Y-%m', InvoiceDate) AS Mes, COUNT(DISTINCT CustomerID) AS Clientes FROM (SELECT CustomerID, InvoiceDate, ROW_NUMBER() OVER (PARTITION BY CustomerID ORDER BY InvoiceDate) AS rn FROM online_retail) WHERE rn = 1 GROUP BY Mes ORDER BY Mes",
+          "x": "Mes",
+          "y": "Clientes",
+          "alto": 340
         }
       ],
       "tablas": [
         {
-          "titulo": "Perfil de Clientes Top",
-          "sub": "Detalle de los clientes con mayor valor para el negocio",
-          "icono": "table_chart",
-          "limite": 30,
-          "altura": 450,
-          "sql": "SELECT \"CustomerID\" AS Cliente, \"Country\" AS Pais, COUNT(DISTINCT \"InvoiceNo\") AS Facturas, SUM(\"Quantity\") AS Unidades, ROUND(SUM(\"Quantity\" * \"UnitPrice\"), 2) AS Gasto_Total, ROUND(SUM(\"Quantity\" * \"UnitPrice\") / NULLIF(COUNT(DISTINCT \"InvoiceNo\"), 0), 2) AS Ticket_Promedio FROM online_retail GROUP BY \"CustomerID\", \"Country\" ORDER BY Gasto_Total DESC"
+          "titulo": "Top 20 Clientes",
+          "sub": "Clientes con mayor valor para el negocio",
+          "icono": "emoji_events",
+          "sql": "SELECT CAST(CustomerID AS INTEGER) AS ClienteID, Country AS Pais, COUNT(DISTINCT InvoiceNo) AS Facturas, SUM(Quantity) AS Unidades, ROUND(SUM(Quantity * UnitPrice), 2) AS Revenue, ROUND(AVG(UnitPrice), 2) AS PrecioPromedio FROM online_retail WHERE CustomerID IS NOT NULL GROUP BY 1, 2 ORDER BY Revenue DESC",
+          "limite": 20
         }
       ]
     },
     {
-      "id": "geografia",
-      "nombre": "Geografía",
-      "icono": "🌍",
-      "descripcion": "Análisis geográfico de ventas, mercados y oportunidades regionales.",
-      "material_icon": "public",
-      "breadcrumbs": "HOME  /  GEOGRAFÍA",
+      "id": "trends",
+      "nombre": "Tendencias Temporales",
+      "icono": "📈",
+      "descripcion": "Análisis temporal detallado y patrones estacionales",
+      "material_icon": "timeline",
+      "breadcrumbs": "HOME  /  TENDENCIAS TEMPORALES",
       "kpis": [
         {
-          "icono": "public",
-          "label": "Países Atendidos",
-          "sql": "SELECT COUNT(DISTINCT \"Country\") AS v FROM online_retail",
+          "icono": "calendar_today",
+          "label": "Período de Datos",
+          "sql": "SELECT COUNT(DISTINCT strftime('%Y-%m', InvoiceDate)) AS v FROM online_retail",
           "formato": "int",
-          "color": "#246bfd"
+          "color": "#0f3a5f",
+          "sub_label": "Meses con datos"
         },
         {
-          "icono": "flag",
-          "label": "Mercado Principal",
-          "sql": "SELECT \"Country\" AS v FROM online_retail GROUP BY \"Country\" ORDER BY SUM(\"Quantity\" * \"UnitPrice\") DESC LIMIT 1",
-          "formato": "str",
-          "color": "#12b76a"
+          "icono": "speed",
+          "label": "Revenue Prom. Mensual",
+          "sql": "SELECT ROUND(AVG(monthly_revenue), 2) AS v FROM (SELECT strftime('%Y-%m', InvoiceDate) AS Mes, SUM(Quantity * UnitPrice) AS monthly_revenue FROM online_retail GROUP BY Mes)",
+          "formato": "money",
+          "color": "#0e7a5f",
+          "sub_label": "Ingreso promedio mensual"
         },
         {
           "icono": "trending_up",
-          "label": "Ingreso Mercado Principal",
-          "sql": "SELECT SUM(\"Quantity\" * \"UnitPrice\") AS v FROM online_retail WHERE \"Country\" = (SELECT \"Country\" FROM online_retail GROUP BY \"Country\" ORDER BY SUM(\"Quantity\" * \"UnitPrice\") DESC LIMIT 1)",
-          "formato": "money",
-          "color": "#f59e0b"
+          "label": "Mejor Mes",
+          "sql": "SELECT strftime('%Y-%m', InvoiceDate) AS v FROM online_retail GROUP BY strftime('%Y-%m', InvoiceDate) ORDER BY SUM(Quantity * UnitPrice) DESC LIMIT 1",
+          "formato": "str",
+          "color": "#246bfd",
+          "sub_label": "Mes con mayor revenue"
         },
         {
-          "icono": "diversity_3",
-          "label": "Ingreso Promedio por País",
-          "sql": "SELECT ROUND(SUM(\"Quantity\" * \"UnitPrice\") / NULLIF(COUNT(DISTINCT \"Country\"), 0), 2) AS v FROM online_retail",
-          "formato": "money",
-          "color": "#8b5cf6"
+          "icono": "schedule",
+          "label": "Horas Promedio",
+          "sql": "SELECT ROUND(AVG(EXTRACT(HOUR FROM InvoiceDate)), 1) AS v FROM online_retail",
+          "formato": "float",
+          "color": "#c2410c",
+          "sub_label": "Hora promedio de transacción"
         }
       ],
       "graficos": [
         {
-          "titulo": "Ingresos por País",
-          "sub": "Ranking de países por ingresos generados",
+          "tipo": "line",
+          "titulo": "Revenue Semanal",
+          "sub": "Evolución semanal de ingresos",
+          "icono": "show_chart",
+          "sql": "SELECT strftime('%Y-W%W', InvoiceDate) AS Semana, ROUND(SUM(Quantity * UnitPrice), 2) AS Revenue FROM online_retail GROUP BY Semana ORDER BY Semana",
+          "x": "Semana",
+          "y": "Revenue",
+          "alto": 340,
+          "col_izq": 7
+        },
+        {
+          "tipo": "line",
+          "titulo": "Unidades Semanal",
+          "sub": "Volumen de unidades vendidas por semana",
+          "icono": "inventory_2",
+          "sql": "SELECT strftime('%Y-W%W', InvoiceDate) AS Semana, SUM(Quantity) AS Unidades FROM online_retail GROUP BY Semana ORDER BY Semana",
+          "x": "Semana",
+          "y": "Unidades",
+          "alto": 340,
+          "col_izq": 5
+        },
+        {
+          "tipo": "bar",
+          "titulo": "Revenue por Día de Semana",
+          "sub": "Patrones de compra por día",
           "icono": "bar_chart",
-          "tipo": "bar",
-          "alto": 500,
-          "sql": "SELECT \"Country\", ROUND(SUM(\"Quantity\" * \"UnitPrice\"), 2) AS ingresos FROM online_retail GROUP BY \"Country\" ORDER BY ingresos DESC",
-          "x": "Country",
-          "y": "ingresos",
-          "color": "#246bfd"
+          "sql": "SELECT strftime('%w', InvoiceDate) AS Dia, ROUND(SUM(Quantity * UnitPrice), 2) AS Revenue FROM online_retail GROUP BY Dia ORDER BY Dia",
+          "x": "Dia",
+          "y": "Revenue",
+          "alto": 320
         },
         {
-          "titulo": "Unidades Vendidas por País",
-          "sub": "Volumen de ventas por mercado",
-          "icono": "local_shipping",
           "tipo": "bar",
-          "alto": 500,
-          "sql": "SELECT \"Country\", SUM(\"Quantity\") AS unidades FROM online_retail GROUP BY \"Country\" ORDER BY unidades DESC",
-          "x": "Country",
-          "y": "unidades",
-          "color": "#12b76a"
-        },
-        {
-          "titulo": "Participación de Mercado",
-          "sub": "Distribución porcentual de ingresos por país",
-          "icono": "donut_large",
-          "tipo": "pie",
-          "alto": 400,
-          "sql": "SELECT \"Country\", ROUND(SUM(\"Quantity\" * \"UnitPrice\"), 2) AS ingresos FROM online_retail GROUP BY \"Country\" ORDER BY ingresos DESC LIMIT 10",
-          "columna": "Country",
-          "valores": "ingresos"
-        },
-        {
-          "titulo": "Ticket Promedio por País",
-          "sub": "Valor promedio por transacción en cada mercado",
-          "icono": "payments",
-          "tipo": "bar",
-          "alto": 400,
-          "sql": "SELECT \"Country\", ROUND(AVG(\"Quantity\" * \"UnitPrice\"), 2) AS ticket_promedio FROM online_retail GROUP BY \"Country\" ORDER BY ticket_promedio DESC LIMIT 15",
-          "x": "Country",
-          "y": "ticket_promedio",
-          "color": "#f59e0b"
-        }
-      ],
-      "tablas": [
-        {
-          "titulo": "Ranking Completo por País",
-          "sub": "Métricas detalladas de cada mercado internacional",
-          "icono": "table_chart",
-          "limite": 50,
-          "altura": 500,
-          "sql": "SELECT \"Country\" AS Pais, COUNT(DISTINCT \"InvoiceNo\") AS Facturas, COUNT(DISTINCT \"CustomerID\") AS Clientes, SUM(\"Quantity\") AS Unidades, ROUND(SUM(\"Quantity\" * \"UnitPrice\"), 2) AS Ingresos, ROUND(AVG(\"Quantity\" * \"UnitPrice\"), 2) AS Ticket_Promedio FROM online_retail GROUP BY \"Country\" ORDER BY Ingresos DESC"
+          "titulo": "Revenue por Hora del Día",
+          "sub": "Distribución de transacciones por hora",
+          "icono": "schedule",
+          "sql": "SELECT EXTRACT(HOUR FROM InvoiceDate) AS Hora, ROUND(SUM(Quantity * UnitPrice), 2) AS Revenue FROM online_retail GROUP BY Hora ORDER BY Hora",
+          "x": "Hora",
+          "y": "Revenue",
+          "alto": 320
         }
       ]
     }
-  ],
-  "sidebar_disclaimer": "Dashboard generado automáticamente con datos de Online Retail UK. Período: Dic 2010 — Dic 2011.",
-  "footer": "© 2024 Online Retail Dashboard — Datos: 541,909 transacciones en 38 países",
-  "empty_state": {
-    "title": "No hay datos para mostrar",
-    "description": "Cargue los archivos de datos desde el panel lateral para comenzar el análisis.",
-    "hint": ""
-  }
+  ]
 }
