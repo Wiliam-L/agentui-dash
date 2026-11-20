@@ -1,0 +1,6 @@
+﻿SKU,Producto,Categoría "Interna",Marca,Costo,Precio,Stock,Stock Mínimo
+A-001,"Laptop 15""",Tecnología,Dell,$650.00,$899.99,10,3
+A-002,Monitor 27,Tecnología,HP,$180.00,$249.50,,5
+A-003,Silla Ergonómica,Muebles,Acme,$95.00,$149.00,-2,4
+A-004,Escritorio,Muebles,Acme,$120.00,$199.99,25,2
+A-005,Teclado;,Periféricos,Logi,$18.00,$29.99,0,10

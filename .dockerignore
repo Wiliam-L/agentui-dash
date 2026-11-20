@@ -1,0 +1,8 @@
+.venv
+__pycache__
+*.pyc
+.git
+.idea
+.vscode
+app_base/data_uploaded
+app_base/streamlit.log

@@ -1,0 +1,7 @@
+﻿sensor_id,temperatura; DROP TABLE x,lectura,notas,registrado
+S-01,21.5,100,"ok; rm -rf /",2025-01-01T10:00:00
+S-02,22.1,101,"<img src=x onerror=alert(1)>",2025-01-01T10:05:00
+S-03,,,,2025-01-01T10:10:00
+S-04,19.8,99,' OR 1=1 --,2025-01-01T10:15:00
+S-05,23.4,102,=cmd|' /C calc'!A0,2025-01-01T10:20:00
+S-06,21.0,100,normal,2025-01-01T10:25:00

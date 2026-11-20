@@ -40,6 +40,8 @@ from core.data import (
     tablas_disponibles,
     archivo_en_uso,
     ejecutar,
+    ultimo_error,
+    error_seq,
     UPLOAD_DIR,
     DB_PATH,
 )
@@ -835,7 +837,7 @@ def run_query(sql: str) -> str:
         return f"Query error: {e}"
 
     if df.empty:
-        return "Query returned no results."
+        return f"Query error: {ultimo_error()}" if ultimo_error() else "Query returned no results."
 
     # Format as CSV for readability
     csv_output = df.to_csv(index=False)
@@ -880,7 +882,7 @@ def run_query_with_filters(
         return f"Query error: {e}"
 
     if df.empty:
-        return "Query returned no results."
+        return f"Query error: {ultimo_error()}" if ultimo_error() else "Query returned no results."
 
     csv_output = df.to_csv(index=False)
     return f"Query returned {len(df)} rows × {len(df.columns)} columns:\n\n{csv_output}"
@@ -910,7 +912,10 @@ def get_kpi(kpi_json: str) -> str:
         return f"Invalid JSON: {e}"
 
     try:
+        errores_antes = error_seq()
         valor = ejecutar_kpi(kpi_config)
+        if error_seq() != errores_antes:
+            return f"KPI error: {ultimo_error()}"
         label = kpi_config.get("label", "KPI")
         formato = kpi_config.get("formato", "number")
 
@@ -1251,7 +1256,7 @@ def recommend_chart(sql: str) -> str:
         return f"SQL error: {e}"
 
     if df.empty:
-        return "Query returned no data."
+        return f"Query error: {ultimo_error()}" if ultimo_error() else "Query returned no data."
 
     recommendations = recomendar_grafica(df, sql)
     if not recommendations:
@@ -1388,6 +1393,10 @@ def build_module_config(module_json: str) -> str:
 # Main entry point
 # --------------------------------------------------------------------------- #
 
-if __name__ == "__main__":
+def main():
+    """Entry point for the agentui-mcp command."""
     print("Starting MCP server (stdio transport)...", flush=True)
     mcp.run(transport="stdio")
+
+if __name__ == "__main__":
+    main()

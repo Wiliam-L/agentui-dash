@@ -1,0 +1,18 @@
+services:
+  ui:
+    build: .
+    command: ui
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./app_base:/app/app_base
+    environment:
+      - AGENTUI_HOST=0.0.0.0
+
+  mcp:
+    build: .
+    command: ["python", "-m", "agentui_mcp.server"]
+    volumes:
+      - ./app_base:/app/app_base
+    stdin_open: true
+    tty: true

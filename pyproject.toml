@@ -13,14 +13,24 @@ dependencies = [
     "reportlab>=4.0.0",
     "kaleido>=1.0.0",
     "fastmcp>=2.0.0",
+    "sqlglot>=30.33.0",
 ]
 
 [project.scripts]
 ui = "app_base.streamlit_ui.main:cli_entrypoint"
+agentui-mcp = "agentui_mcp.server:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["app_base"]
+packages = ["app_base", "agentui_mcp"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

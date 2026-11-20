@@ -136,6 +136,67 @@ El agente llamará `create_dashboard()` y devolverá la URL del resultado.
 
 ---
 
+## Docker
+
+### Dashboard con Docker
+
+```powershell
+docker compose up -d ui
+```
+
+O directamente con `docker`:
+
+```powershell
+docker build -t agentui-dash .
+docker run -p 8501:8501 agentui-dash
+```
+
+La UI quedará en `http://localhost:8501`.
+
+### Servidor MCP con Docker
+
+Para conectar un cliente MCP (Claude Desktop, Cursor, Windsurf) al servidor que corre dentro del contenedor:
+
+**Opción 1: docker compose (recomendado)**
+
+```powershell
+docker compose run --rm mcp
+```
+
+Esto arranca el servidor MCP en modo interactivo (stdin/stdout) listo para ser consumido por el cliente.
+
+**Opción 2: docker run**
+
+```powershell
+docker run -i --rm agentui-dash python -m agentui_mcp.server
+```
+
+**Configuración del cliente**
+
+En `claude_desktop_config.json` (o equivalente) usar el comando `docker` con los argumentos apropiados:
+
+```json
+{
+  "mcpServers": {
+    "agentui-docker": {
+      "command": "docker",
+      "args": [
+        "exec", 
+        "-i", 
+        "mcp_hackathon-copia-mcp-1", 
+        "python", 
+        "-m", 
+        "agentui_mcp.server"
+      ]
+    }
+  }
+}
+```
+
+Nota: el nombre del contenedor (`mcp_hackathon-copia-mcp-1`) depende del proyecto de Docker Compose. Se puede obtener con `docker ps`.
+
+---
+
 ## El contrato `ui_config.json`
 
 Todo lo que se ve en pantalla sale de este archivo. Un módulo mínimo se ve así:

