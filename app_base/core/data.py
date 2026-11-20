@@ -279,6 +279,8 @@ def ejecutar(
     Failures are logged instead of swallowed silently; ``ultimo_error()``
     exposes the last message so the UI can surface it.
 
+    Execution time is logged for performance monitoring.
+
     Args:
         sql: SQL query string.
         params: Optional named parameters.
@@ -299,15 +301,21 @@ def ejecutar(
         )
         return pd.DataFrame()
 
+    start = time.time()
     con = _open_con(read_only=True)
     try:
         df = con.execute(sql, params or {}).df()
+        elapsed = time.time() - start
+        _logger.debug(f"Query executed in {elapsed:.3f}s: {sql[:100]}")
+        if elapsed > 2.0:
+            _logger.warning(f"Slow query ({elapsed:.3f}s): {sql[:200]}")
         return df
     except Exception as exc:
+        elapsed = time.time() - start
         _ULTIMO_ERROR = f"{type(exc).__name__}: {exc}"
         _ERROR_SEQ += 1
         _logger.error(
-            "Query failed: %s | SQL: %s",
+            "Query failed after {elapsed:.3f}s: %s | SQL: %s",
             exc,
             " ".join(str(sql).split())[:300],
         )

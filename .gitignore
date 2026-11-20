@@ -4,9 +4,13 @@ __pycache__/
 *$py.class
 *.so
 *.egg-info/
+*.egg
 dist/
 build/
-*.egg
+
+# Environment files
+.env
+.env.*
 
 # Virtual environments
 .venv/
@@ -53,6 +57,14 @@ compact.md
 compact-persist.log
 .playwright-mcp/
 
+# Screenshots and images
+screenshots/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
 # Fonts and large binaries
 *.ttf
 *.otf
@@ -63,7 +75,17 @@ uv.lock
 # Uploaded data and manifests
 data_uploaded/
 
+# Large CSV data files (sample data for testing, not source code)
+*.csv
+
+# Config backups created by tools.py
+*.json.bak
+
+# LLM session logs
+LOGS_LLM.MD
+
 # Task/feature docs (not for repo)
 task.md
 requirements.md
 feature.md
+FEATURE.md

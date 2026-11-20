@@ -221,7 +221,10 @@ mcp = FastMCP(
         "  heatmap: Heatmap         →  x, y, valores, titulo, sql\n"
         "  bar_grouped: Grouped bars →  x, y, group_by, titulo, sql\n"
         "  bar_stacked: Stacked bars →  x, y, stack_by, titulo, sql\n"
-        "  Common: icono, sub(description), alto(height px), col_izq(width ratio)\n\n"
+        "  Common: icono, sub(description), alto(height px), col_izq(width ratio)\n"
+        "  ⚠️ Chart `color` field: If present, it must be a COLUMN NAME from your SQL result\n"
+        "     (for grouping bars/lines by category). It is NOT a hex color code.\n"
+        "     Omit `color` for single-color charts — the system auto-applies a palette.\n\n"
         "--- DATA TABLE ---\n"
         "    titulo: Display title\n"
         "    sub: Description text\n"
@@ -246,6 +249,44 @@ mcp = FastMCP(
         "  \"empty_state\": {\"title\": \"No data\", \"description\": \"Upload files to start.\"}\n"
         "}\n\n"
         "========================================================================\n"
+        "⚠️ CRITICAL RULES — Read carefully to avoid dashboard errors\n"
+        "========================================================================\n\n"
+        "--- CHART `color` FIELD — Most Common Mistake ---\n"
+        "  In CHARTS, the `color` field is a COLUMN NAME for grouping, NOT a hex color.\n"
+        "  - ✅ Correct: \"color\": \"Country\"  (groups bars by Country column)\n"
+        "  - ❌ WRONG:  \"color\": \"#246bfd\"  (this breaks the chart — hex colors are for KPIs only)\n"
+        "  - If you want a single-color chart, simply OMIT the `color` field.\n"
+        "  - The system automatically applies a color palette. You do NOT need to set colors on charts.\n\n"
+        "  In KPIs, the `color` field IS a hex color for the card background.\n"
+        "  - ✅ Correct: \"color\": \"#246bfd\"  (KPI card background color)\n\n"
+        "--- SQL FILTER INJECTION — How Global Filters Work ---\n"
+        "  Every SQL query in ui_config.json is automatically combined with global filters.\n"
+        "  The system injects a WHERE clause for date ranges and country/branch filters.\n\n"
+        "  Important rules for writing SQL:\n"
+        "  1. Your SQL queries the base table directly (e.g. \"online_retail\").\n"
+        "  2. If your SQL already has a WHERE clause, the system merges filters with AND.\n"
+        "  3. For subqueries/CTEs: the filter columns (InvoiceDate, Country) must exist\n"
+        "     in the subquery that reads from the base table, not in the outer query.\n"
+        "  4. Example of a safe subquery:\n"
+        "     WITH freq AS (\n"
+        "       SELECT \"CustomerID\", COUNT(DISTINCT \"InvoiceNo\") AS num_facturas\n"
+        "       FROM online_retail  ← filters inject here (InvoiceDate, Country exist)\n"
+        "       GROUP BY \"CustomerID\"\n"
+        "     ) SELECT CASE WHEN num_facturas <= 5 THEN '1-5' ... FROM freq GROUP BY rango\n\n"
+        "  5. Avoid inline subqueries in FROM when filter columns don't exist in the subquery.\n"
+        "     Use CTEs (WITH ... AS) instead — they are easier for the filter injector.\n\n"
+        "--- CHART COLUMN REFERENCES ---\n"
+        "  The `x`, `y`, `columna`, `valores` fields in charts must exactly match\n"
+        "  the column aliases returned by your SQL query.\n"
+        "  - If your SQL returns \"SELECT Country, SUM(...) AS ventas ...\",\n"
+        "    then use \"x\": \"Country\", \"y\": \"ventas\" (case-sensitive match).\n"
+        "  - For pie charts: \"columna\" is the category column, \"valores\" is the numeric column.\n\n"
+        "--- VALIDATION — Always verify before saving ---\n"
+        "  After building or modifying ui_config.json:\n"
+        "  1. Call validate_config() to check all SQL queries execute correctly.\n"
+        "  2. Fix any errors reported before telling the user the dashboard is ready.\n"
+        "  3. A valid config has 0 structural errors and 0 SQL errors.\n\n"
+        "========================================================================\n"
         "KEY RULES\n"
         "========================================================================\n\n"
         "- NEVER hardcode column names. Use names from explore_data() or detect_columns().\n"
@@ -258,6 +299,8 @@ mcp = FastMCP(
         "- When the user asks a data question, use run_query() or get_kpi() to answer.\n"
         "- A good dashboard has: ≥3 KPIs, ≥2 charts, ≥1 filter, and meaningful labels.\n"
         "- Use multiple modules for complex data (e.g. \"Overview\" + \"Details\" + \"Inventory\").\n"
+        "- ⚠️ NEVER put hex colors in chart `color` fields — only in KPI `color` fields.\n"
+        "- ⚠️ ALWAYS validate your config with validate_config() before delivering.\n"
     ),
 )
 
@@ -783,7 +826,15 @@ def update_config(json_string: str) -> str:
     - Validates each KPI has sql and label
     - Validates each chart has sql, tipo, and titulo
     - Validates each filter has nombre, columna, and tabla
+    - Validates all SQL queries for syntax errors
     - Auto-fills missing optional fields (brand_name, footer, empty_state, etc.)
+    - Creates a backup of the previous config (.json.bak)
+
+    ⚠️ BEFORE calling this tool, you MUST:
+    1. Review your JSON carefully — especially chart `color` fields (column name, NOT hex).
+    2. Ensure all SQL queries use the correct table name and column names.
+    3. After saving, call validate_config() to verify all queries execute correctly.
+    4. Fix any errors reported by validate_config() before telling the user it's ready.
 
     Args:
         json_string: Valid JSON string with complete ui_config.json structure.
@@ -1057,6 +1108,136 @@ def get_available_roles() -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Validation Tools
+# --------------------------------------------------------------------------- #
+
+
+@mcp.tool()
+def validate_config() -> str:
+    """Validate all SQL queries in the current ui_config.json against the database.
+
+    This tool checks:
+    - JSON structure validity (required keys, types)
+    - SQL syntax for every KPI, chart, and table query
+    - Executes each query to verify it returns results
+    - Reports execution time for each query
+
+    Use this AFTER generate_config() or update_config() to verify the dashboard
+    will render correctly before showing it to the user.
+
+    Returns:
+        A detailed validation report showing pass/fail status for each query.
+    """
+    config = cargar_config(CONFIG_PATH)
+    if not config:
+        return "No config file found. Run generate_config or update_config first."
+
+    import time as _time
+
+    lines = ["=== Config Validation Report ===", ""]
+
+    # 1. Structure validation
+    from core.tools import _validar_config, _validar_sql_en_config
+    struct_errors = _validar_config(config)
+    sql_errors = _validar_sql_en_config(config)
+
+    if struct_errors:
+        lines.append("❌ Structure errors:")
+        for e in struct_errors:
+            lines.append(f"   - {e}")
+        lines.append("")
+
+    if sql_errors:
+        lines.append("❌ SQL syntax errors:")
+        for e in sql_errors:
+            lines.append(f"   - {e}")
+        lines.append("")
+
+    # 2. Execute each query and report
+    lines.append("--- Query Execution Results ---")
+    total = 0
+    passed = 0
+    failed = 0
+
+    for mod in config.get("modulos", []):
+        mod_name = mod.get("nombre", "Unknown")
+        lines.append(f"\n  Module: {mod_name}")
+
+        # KPIs
+        for kpi in mod.get("kpis", []):
+            label = kpi.get("label", "?")
+            sql = kpi.get("sql", "")
+            total += 1
+            try:
+                start = _time.time()
+                df = ejecutar(sql)
+                elapsed = _time.time() - start
+                if not df.empty:
+                    val = df.iloc[0, 0]
+                    lines.append(f"  ✓ KPI '{label}': {val} ({elapsed:.3f}s)")
+                    passed += 1
+                else:
+                    lines.append(f"  ⚠ KPI '{label}': empty result ({elapsed:.3f}s)")
+                    failed += 1
+            except Exception as e:
+                lines.append(f"  ✗ KPI '{label}': {e}")
+                failed += 1
+
+        # Charts
+        for ch in mod.get("graficos", []):
+            titulo = ch.get("titulo", "?")
+            sql = ch.get("sql", "")
+            total += 1
+            try:
+                start = _time.time()
+                df = ejecutar(sql)
+                elapsed = _time.time() - start
+                if not df.empty:
+                    lines.append(f"  ✓ Chart '{titulo}': {len(df)} rows ({elapsed:.3f}s)")
+                    passed += 1
+                else:
+                    lines.append(f"  ⚠ Chart '{titulo}': empty result ({elapsed:.3f}s)")
+                    failed += 1
+            except Exception as e:
+                lines.append(f"  ✗ Chart '{titulo}': {e}")
+                failed += 1
+
+        # Tables
+        for tbl in mod.get("tablas", []):
+            titulo = tbl.get("titulo", "?")
+            sql = tbl.get("sql", "")
+            total += 1
+            try:
+                start = _time.time()
+                df = ejecutar(sql)
+                elapsed = _time.time() - start
+                if not df.empty:
+                    lines.append(f"  ✓ Table '{titulo}': {len(df)} rows ({elapsed:.3f}s)")
+                    passed += 1
+                else:
+                    lines.append(f"  ⚠ Table '{titulo}': empty result ({elapsed:.3f}s)")
+                    failed += 1
+            except Exception as e:
+                lines.append(f"  ✗ Table '{titulo}': {e}")
+                failed += 1
+
+    # Summary
+    lines.append(f"\n=== Summary ===")
+    lines.append(f"  Total queries: {total}")
+    lines.append(f"  Passed: {passed} ✓")
+    lines.append(f"  Failed/Empty: {failed} {'✗' if failed else ''}")
+    lines.append(f"  Structure errors: {len(struct_errors)}")
+    lines.append(f"  SQL syntax errors: {len(sql_errors)}")
+
+    if failed == 0 and not struct_errors and not sql_errors:
+        lines.append(f"\n✅ All queries validated successfully!")
+    else:
+        lines.append(f"\n⚠️  Some issues found — review the report above.")
+
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- #
 # Preview Tools
 # --------------------------------------------------------------------------- #
 
@@ -1275,6 +1456,10 @@ def recommend_chart(sql: str) -> str:
 def build_chart_config(chart_json: str) -> str:
     """Build a complete chart config dict for ui_config.json.
 
+    ⚠️ IMPORTANT: The `color` field in charts is a COLUMN NAME for grouping,
+    NOT a hex color. If you want a single-color chart, omit `color` entirely.
+    Hex colors (like "#246bfd") are only for KPI cards, not charts.
+
     Args:
         chart_json: JSON string with chart parameters:
             {
@@ -1285,6 +1470,11 @@ def build_chart_config(chart_json: str) -> str:
                 "y": "Sales",
                 "alto": 380
             }
+        Optional fields:
+            "color": Column name for grouping (e.g. "Country"), NOT a hex color.
+            "sub": Description text below the chart title.
+            "icono": Material icon name.
+            "col_izq": Width ratio for side-by-side charts (0.5 = half width).
 
     Returns:
         Complete chart config dict as JSON string.
@@ -1305,14 +1495,19 @@ def build_chart_config(chart_json: str) -> str:
 def build_kpi_config(kpi_json: str) -> str:
     """Build a complete KPI config dict for ui_config.json.
 
+    Note: The `color` field in KPIs IS a hex color for the card background
+    (e.g. "#246bfd"). This is different from charts where `color` is a column name.
+
     Args:
         kpi_json: JSON string with KPI parameters:
             {
                 "sql": "SELECT SUM(total_usd) FROM sales",
                 "label": "Total Sales",
                 "icono": "payments",
-                "formato": "money"
+                "formato": "money",
+                "color": "#246bfd"
             }
+        The SQL must return a single value in a column named "v".
 
     Returns:
         Complete KPI config dict as JSON string.

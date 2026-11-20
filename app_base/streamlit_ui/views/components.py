@@ -1,9 +1,18 @@
 """Shared visual components (KPI cards, page headers, chart styling)."""
+import re
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 from ..styles import colores_grafico, PALETA
+
+
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{3,8}$")
+
+
+def _is_hex_color(value) -> bool:
+    """Return True if *value* looks like a CSS hex color (e.g. '#246bfd')."""
+    return isinstance(value, str) and _HEX_COLOR_RE.match(value) is not None
 
 
 def encabezado_pagina(ic: str, titulo: str, ruta: str, descripcion: str) -> None:
@@ -130,34 +139,46 @@ def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
     if tipo == "bar":
         x = chart_config.get("x")
         y = chart_config.get("y")
-        color = chart_config.get("color")
+        color_raw = chart_config.get("color")
         if not x or not y:
             return
-        color_seq = PALETA if color else None
-        fig = px.bar(df, x=x, y=y, color=color,
-                     color_discrete_sequence=color_seq)
+        # Distinguish: hex color (styling) vs column name (grouping)
+        if _is_hex_color(color_raw):
+            fig = px.bar(df, x=x, y=y, color_discrete_sequence=[color_raw])
+            show_legend = False
+        else:
+            color_col = color_raw  # treat as column name for grouping
+            fig = px.bar(df, x=x, y=y, color=color_col,
+                         color_discrete_sequence=PALETA)
+            show_legend = bool(color_col)
         fig.update_traces(marker_line_width=0,
                           hovertemplate="<b>%{x}</b><br>%{y:$,.2f}<extra></extra>")
         estilizar(fig, alto=alto)
-        fig.update_layout(showlegend=bool(color), xaxis=dict(title=""), yaxis=dict(title=""))
+        fig.update_layout(showlegend=show_legend, xaxis=dict(title=""), yaxis=dict(title=""))
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     elif tipo == "bar_h":
         x = chart_config.get("x")
         y = chart_config.get("y")
-        color = chart_config.get("color")
+        color_raw = chart_config.get("color")
         if not x or not y:
             return
-        if color:
-            fig = px.bar(df, x=x, y=y, orientation="h", color=color,
+        if _is_hex_color(color_raw):
+            fig = px.bar(df, x=x, y=y, orientation="h",
+                         color_discrete_sequence=[color_raw])
+            show_legend = False
+        elif color_raw:
+            fig = px.bar(df, x=x, y=y, orientation="h", color=color_raw,
                          color_discrete_sequence=PALETA)
+            show_legend = True
         else:
             fig = px.bar(df, x=x, y=y, orientation="h",
                          color_discrete_sequence=PALETA)
+            show_legend = False
         fig.update_traces(marker_line_width=0,
                           hovertemplate="<b>%{y}</b><br>%{x:$,.2f}<extra></extra>")
         estilizar(fig, alto=alto)
-        fig.update_layout(showlegend=bool(color), xaxis=dict(showticklabels=False), yaxis=dict(title=""))
+        fig.update_layout(showlegend=show_legend, xaxis=dict(showticklabels=False), yaxis=dict(title=""))
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     elif tipo == "pie":
@@ -176,24 +197,33 @@ def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
     elif tipo == "line":
         x = chart_config.get("x")
         y = chart_config.get("y")
-        color = chart_config.get("color")
+        color_raw = chart_config.get("color")
         if not x or not y:
             return
-        fig = px.line(df, x=x, y=y, color=color,
-                      color_discrete_sequence=PALETA)
+        if _is_hex_color(color_raw):
+            fig = px.line(df, x=x, y=y, color_discrete_sequence=[color_raw])
+            show_legend = False
+        else:
+            fig = px.line(df, x=x, y=y, color=color_raw,
+                          color_discrete_sequence=PALETA)
+            show_legend = bool(color_raw)
         estilizar(fig, alto=alto)
-        fig.update_layout(showlegend=bool(color), xaxis=dict(title=""), yaxis=dict(title=""))
+        fig.update_layout(showlegend=show_legend, xaxis=dict(title=""), yaxis=dict(title=""))
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     elif tipo == "scatter":
         x = chart_config.get("x")
         y = chart_config.get("y")
-        color = chart_config.get("color")
+        color_raw = chart_config.get("color")
         size = chart_config.get("size")
         if not x or not y:
             return
-        fig = px.scatter(df, x=x, y=y, color=color, size=size,
-                         color_discrete_sequence=PALETA, opacity=0.8)
+        if _is_hex_color(color_raw):
+            fig = px.scatter(df, x=x, y=y, size=size,
+                             color_discrete_sequence=[color_raw], opacity=0.8)
+        else:
+            fig = px.scatter(df, x=x, y=y, color=color_raw, size=size,
+                             color_discrete_sequence=PALETA, opacity=0.8)
         fig.update_traces(marker=dict(line=dict(width=1, color="#ffffff")),
                           hovertemplate="<b>%{color}</b><br>%{x:,.0f}<br>%{y:.1f}<extra></extra>")
         estilizar(fig, alto=alto)
@@ -220,11 +250,15 @@ def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
     elif tipo == "bar_grouped":
         x = chart_config.get("x")
         y = chart_config.get("y")
-        color = chart_config.get("color")
+        color_raw = chart_config.get("color")
         if not x or not y:
             return
-        fig = px.bar(df, x=x, y=y, color=color, barmode="group",
-                     color_discrete_sequence=PALETA)
+        if _is_hex_color(color_raw):
+            fig = px.bar(df, x=x, y=y, barmode="group",
+                         color_discrete_sequence=[color_raw])
+        else:
+            fig = px.bar(df, x=x, y=y, color=color_raw, barmode="group",
+                         color_discrete_sequence=PALETA)
         fig.update_traces(hovertemplate="<b>%{x}</b><br>%{color}: %{y:,}<extra></extra>")
         estilizar(fig, alto=alto)
         fig.update_layout(xaxis=dict(title=""), yaxis=dict(title=""))
@@ -233,11 +267,15 @@ def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
     elif tipo == "bar_stacked":
         x = chart_config.get("x")
         y = chart_config.get("y")
-        color = chart_config.get("color")
+        color_raw = chart_config.get("color")
         if not x or not y:
             return
-        fig = px.bar(df, x=x, y=y, color=color, barmode="stack",
-                     color_discrete_sequence=PALETA)
+        if _is_hex_color(color_raw):
+            fig = px.bar(df, x=x, y=y, barmode="stack",
+                         color_discrete_sequence=[color_raw])
+        else:
+            fig = px.bar(df, x=x, y=y, color=color_raw, barmode="stack",
+                         color_discrete_sequence=PALETA)
         fig.update_traces(hovertemplate="<b>%{x}</b><br>%{color}: %{y:,}<extra></extra>")
         estilizar(fig, alto=alto)
         fig.update_layout(xaxis=dict(title=""), yaxis=dict(title=""))
