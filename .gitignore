@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# DuckDB
+*.duckdb
+*.db
+*.sqlite
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Streamlit
+# The theme config is required at runtime: without it the BaseWeb widgets
+# (multiselect, file uploader) fall back to the dark palette and render black.
+.streamlit/*
+!.streamlit/config.toml
+app_base/.streamlit/*
+!app_base/.streamlit/config.toml
+
+# Logs
+*.log
+
+# OS/Editor temp files
+*.tmp
+*.temp
+
+# Junie session artifacts
+.junie/
+
+# Local session artifacts
+compact.md
+compact-persist.log
+.playwright-mcp/
+
+# Fonts and large binaries
+*.ttf
+*.otf
+
+# uv lock files
+uv.lock
+
+# Uploaded data and manifests
+data_uploaded/
+
+# Task/feature docs (not for repo)
+task.md
+requirements.md
+feature.md

@@ -1,0 +1,244 @@
+"""Shared visual components (KPI cards, page headers, chart styling)."""
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+
+from ..styles import colores_grafico, PALETA
+
+
+def encabezado_pagina(ic: str, titulo: str, ruta: str, descripcion: str) -> None:
+    st.markdown(
+        f"""
+        <div class="breadcrumb">{ruta}</div>
+        <div class="page-title">
+            <span class="pt-ic"><span class="mi">{ic}</span></span>
+            <div>
+                <h1>{titulo}</h1>
+                <div class="page-desc">{descripcion}</div>
+            </div>
+        </div>
+        <hr style="margin: 14px 0 22px; border:0; border-top:1px solid var(--border);">
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def open_card(titulo: str, sub: str = None, ic: str = "insights") -> str:
+    head = (
+        f'<div class="card-head"><span class="chip-ic"><span class="mi">{ic}</span></span>'
+        f'<div><div class="card-title">{titulo}</div>'
+        + (f'<div class="card-sub">{sub}</div>' if sub else "")
+        + "</div></div>"
+    )
+    return f'<div class="card">{head}<div class="card-body">'
+
+
+def close_card() -> str:
+    return "</div></div>"
+
+
+def kpi(ic: str, titulo: str, valor, sub: str, acc: str, neg: bool = False) -> str:
+    clase = "kpi-sub neg" if neg else "kpi-sub"
+    return (
+        f'<div class="kpi" style="--acc:{acc};">'
+        f'<div class="kpi-top"><span class="kpi-ic"><span class="mi">{ic}</span></span>'
+        f'<span class="kpi-label">{titulo}</span></div>'
+        f'<div class="kpi-value">{valor}</div>'
+        f'<div class="{clase}">{sub}</div></div>'
+    )
+
+
+def fmt_num(n) -> str:
+    return f"{n:,.0f}".replace(",", ".")
+
+
+def fmt_money(n) -> str:
+    return f"${n:,.2f}".replace(",", ".")
+
+
+def fmt_short_money(n) -> str:
+    """Abbreviate large monetary values: $2.3M, $2.3K, $2.3B."""
+    n = float(n)
+    if n < 0:
+        return "-" + fmt_short_money(-n)
+    if n >= 1_000_000_000:
+        return f"${n / 1_000_000_000:.1f}B"
+    elif n >= 1_000_000:
+        return f"${n / 1_000_000:.1f}M"
+    elif n >= 1_000:
+        return f"${n / 1_000:.1f}K"
+    else:
+        return f"${n:,.2f}".replace(",", ".")
+
+
+def badge(ic: str, texto: str) -> str:
+    return f'<span class="badge"><span class="mi">{ic}</span> {texto}</span>'
+
+
+def estilizar(fig, alto: int = 330, hover: str = None):
+    colores = colores_grafico()
+    fig.update_layout(
+        height=alto,
+        paper_bgcolor=colores["paper"],
+        plot_bgcolor=colores["plot"],
+        font=dict(
+            family="-apple-system, Segoe UI, Roboto, sans-serif",
+            color=colores["font"],
+            size=13,
+        ),
+        margin=dict(l=10, r=10, t=8, b=10),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            title_text="",
+        ),
+    )
+    fig.update_xaxes(showgrid=False, linecolor=colores["line"], zeroline=False)
+    fig.update_yaxes(showgrid=True, gridcolor=colores["grid"], zeroline=False)
+    if hover:
+        fig.update_traces(hovertemplate=hover)
+    return fig
+
+
+# --------------------------------------------------------------------------- #
+# Dynamic chart renderer — reads JSON config and dispatches to Plotly
+# --------------------------------------------------------------------------- #
+def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
+    """Render a Plotly chart from a JSON config dict and DataFrame.
+
+    Supports chart types: bar, pie, line, scatter, bar_h, heatmap,
+    bar_grouped, bar_stacked.
+
+    The config dict keys map to Plotly parameters:
+      - tipo: chart type (bar, pie, line, scatter, bar_h, heatmap, bar_grouped, bar_stacked)
+      - x, y: column names for axes
+      - columna: column name for pie charts (names)
+      - valores: column name for pie/heatmap values
+      - color: column name for color grouping
+      - titulo: chart title (displayed in card header, not used here)
+      - alto: figure height (default 350)
+    """
+    if df.empty:
+        return
+
+    tipo = chart_config.get("tipo", "bar")
+    alto = chart_config.get("alto", 350)
+
+    if tipo == "bar":
+        x = chart_config.get("x")
+        y = chart_config.get("y")
+        color = chart_config.get("color")
+        if not x or not y:
+            return
+        color_seq = PALETA if color else None
+        fig = px.bar(df, x=x, y=y, color=color,
+                     color_discrete_sequence=color_seq)
+        fig.update_traces(marker_line_width=0,
+                          hovertemplate="<b>%{x}</b><br>%{y:$,.2f}<extra></extra>")
+        estilizar(fig, alto=alto)
+        fig.update_layout(showlegend=bool(color), xaxis=dict(title=""), yaxis=dict(title=""))
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+    elif tipo == "bar_h":
+        x = chart_config.get("x")
+        y = chart_config.get("y")
+        color = chart_config.get("color")
+        if not x or not y:
+            return
+        if color:
+            fig = px.bar(df, x=x, y=y, orientation="h", color=color,
+                         color_discrete_sequence=PALETA)
+        else:
+            fig = px.bar(df, x=x, y=y, orientation="h",
+                         color_discrete_sequence=PALETA)
+        fig.update_traces(marker_line_width=0,
+                          hovertemplate="<b>%{y}</b><br>%{x:$,.2f}<extra></extra>")
+        estilizar(fig, alto=alto)
+        fig.update_layout(showlegend=bool(color), xaxis=dict(showticklabels=False), yaxis=dict(title=""))
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+    elif tipo == "pie":
+        columna = chart_config.get("columna")
+        valores = chart_config.get("valores")
+        if not columna or not valores:
+            return
+        fig = px.pie(df, names=columna, values=valores, hole=0.58,
+                     color_discrete_sequence=PALETA)
+        fig.update_traces(textinfo="percent", textposition="inside",
+                          textfont=dict(color="white", size=12),
+                          hovertemplate="<b>%{label}</b><br>%{value:$,.2f} · %{percent}<extra></extra>")
+        estilizar(fig, alto=alto)
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+    elif tipo == "line":
+        x = chart_config.get("x")
+        y = chart_config.get("y")
+        color = chart_config.get("color")
+        if not x or not y:
+            return
+        fig = px.line(df, x=x, y=y, color=color,
+                      color_discrete_sequence=PALETA)
+        estilizar(fig, alto=alto)
+        fig.update_layout(showlegend=bool(color), xaxis=dict(title=""), yaxis=dict(title=""))
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+    elif tipo == "scatter":
+        x = chart_config.get("x")
+        y = chart_config.get("y")
+        color = chart_config.get("color")
+        size = chart_config.get("size")
+        if not x or not y:
+            return
+        fig = px.scatter(df, x=x, y=y, color=color, size=size,
+                         color_discrete_sequence=PALETA, opacity=0.8)
+        fig.update_traces(marker=dict(line=dict(width=1, color="#ffffff")),
+                          hovertemplate="<b>%{color}</b><br>%{x:,.0f}<br>%{y:.1f}<extra></extra>")
+        estilizar(fig, alto=alto)
+        fig.update_layout(xaxis=dict(title=""), yaxis=dict(title=""))
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+    elif tipo == "heatmap":
+        x = chart_config.get("x")
+        y = chart_config.get("y")
+        valores = chart_config.get("valores")
+        if not x or not y or not valores:
+            return
+        cruz = pd.pivot_table(df, index=y, columns=x, values=valores, aggfunc="sum").fillna(0)
+        fig = px.imshow(cruz, text_auto=True, aspect="auto",
+                        color_continuous_scale=["#e0f2fe", "#246bfd"])
+        fig.update_layout(height=alto, margin=dict(l=10, r=10, t=8, b=10),
+                          paper_bgcolor="rgba(0,0,0,0)",
+                          font=dict(color="#334155", size=12))
+        fig.update_traces(textfont=dict(color="#0f172a"))
+        fig.update_xaxes(title="")
+        fig.update_yaxes(title="")
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+    elif tipo == "bar_grouped":
+        x = chart_config.get("x")
+        y = chart_config.get("y")
+        color = chart_config.get("color")
+        if not x or not y:
+            return
+        fig = px.bar(df, x=x, y=y, color=color, barmode="group",
+                     color_discrete_sequence=PALETA)
+        fig.update_traces(hovertemplate="<b>%{x}</b><br>%{color}: %{y:,}<extra></extra>")
+        estilizar(fig, alto=alto)
+        fig.update_layout(xaxis=dict(title=""), yaxis=dict(title=""))
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+    elif tipo == "bar_stacked":
+        x = chart_config.get("x")
+        y = chart_config.get("y")
+        color = chart_config.get("color")
+        if not x or not y:
+            return
+        fig = px.bar(df, x=x, y=y, color=color, barmode="stack",
+                     color_discrete_sequence=PALETA)
+        fig.update_traces(hovertemplate="<b>%{x}</b><br>%{color}: %{y:,}<extra></extra>")
+        estilizar(fig, alto=alto)
+        fig.update_layout(xaxis=dict(title=""), yaxis=dict(title=""))
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})

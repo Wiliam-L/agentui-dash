@@ -1,0 +1,437 @@
+{
+  "titulo_pagina": "Superstore | Corporate Analytics",
+  "brand_name": "SUPERSTORE",
+  "brand_sub": "Corporate Analytics",
+  "brand_icon": "corporate_fare",
+  "sidebar_disclaimer": "Uso interno · Información confidencial",
+  "footer": "Superstore Corporate Analytics · Datos 2023–2026 · Fuente: Sample Superstore",
+  "column_mapping": {
+    "date": "Order Date",
+    "sales": "Sales",
+    "profit": "Profit",
+    "quantity": "Quantity",
+    "discount": "Discount",
+    "category": "Category",
+    "sub_category": "Sub-Category",
+    "region": "Region",
+    "segment": "Segment",
+    "ship_mode": "Ship Mode",
+    "state": "State/Province",
+    "city": "City"
+  },
+  "filtros_globales": [
+    {
+      "nombre": "date_range",
+      "etiqueta": "Rango de Fechas",
+      "columna": "Order Date",
+      "tabla": "superstore",
+      "tipo": "date_range"
+    },
+    {
+      "nombre": "region",
+      "etiqueta": "Región",
+      "columna": "Region",
+      "tabla": "superstore",
+      "tipo": "multiselect",
+      "todos_label": "Todas las regiones"
+    },
+    {
+      "nombre": "category",
+      "etiqueta": "Categoría",
+      "columna": "Category",
+      "tabla": "superstore",
+      "tipo": "multiselect",
+      "todos_label": "Todas las categorías"
+    },
+    {
+      "nombre": "segment",
+      "etiqueta": "Segmento",
+      "columna": "Segment",
+      "tabla": "superstore",
+      "tipo": "multiselect",
+      "todos_label": "Todos los segmentos"
+    },
+    {
+      "nombre": "ship_mode",
+      "etiqueta": "Modo de Envío",
+      "columna": "Ship Mode",
+      "tabla": "superstore",
+      "tipo": "select",
+      "todos_label": "Todos los envíos"
+    }
+  ],
+  "empty_state": {
+    "title": "Sin datos disponibles",
+    "description": "Cargue un archivo CSV/Excel para comenzar el análisis corporativo."
+  },
+  "modulos": [
+    {
+      "id": "overview",
+      "nombre": "Resumen Ejecutivo",
+      "icono": "📊",
+      "descripcion": "Indicadores clave y desempeño global del negocio",
+      "material_icon": "dashboard",
+      "breadcrumbs": "HOME  /  RESUMEN EJECUTIVO",
+      "kpis": [
+        {
+          "icono": "payments",
+          "label": "Ventas Totales",
+          "sql": "SELECT SUM(Sales) AS v FROM superstore",
+          "formato": "money",
+          "color": "#0f3a5f",
+          "sub_label": "Ingresos acumulados"
+        },
+        {
+          "icono": "trending_up",
+          "label": "Utilidad Total",
+          "sql": "SELECT SUM(Profit) AS v FROM superstore",
+          "formato": "money",
+          "color": "#0e7a5f",
+          "sub_label": "Ganancia neta"
+        },
+        {
+          "icono": "insights",
+          "label": "Margen de Utilidad",
+          "sql": "SELECT ROUND(SUM(Profit) / SUM(Sales) * 100, 2) AS v FROM superstore",
+          "formato": "float",
+          "color": "#246bfd",
+          "sub_label": "% sobre ventas",
+          "sub_suffix": " %"
+        },
+        {
+          "icono": "receipt_long",
+          "label": "Pedidos",
+          "sql": "SELECT COUNT(DISTINCT \"Order ID\") AS v FROM superstore",
+          "formato": "int",
+          "color": "#7c3aed",
+          "sub_label": "Órdenes únicas"
+        },
+        {
+          "icono": "inventory_2",
+          "label": "Unidades Vendidas",
+          "sql": "SELECT SUM(Quantity) AS v FROM superstore",
+          "formato": "int",
+          "color": "#c2410c",
+          "sub_label": "Cantidad total"
+        },
+        {
+          "icono": "percent",
+          "label": "Descuento Promedio",
+          "sql": "SELECT ROUND(AVG(Discount) * 100, 2) AS v FROM superstore",
+          "formato": "float",
+          "color": "#b45309",
+          "sub_label": "% de descuento medio",
+          "sub_suffix": " %"
+        }
+      ],
+      "graficos": [
+        {
+          "tipo": "line",
+          "titulo": "Tendencia Mensual de Ventas",
+          "sub": "Evolución de ingresos por mes",
+          "icono": "show_chart",
+          "sql": "SELECT date_trunc('month', \"Order Date\") AS Mes, SUM(Sales) AS Ventas FROM superstore GROUP BY Mes ORDER BY Mes",
+          "x": "Mes",
+          "y": "Ventas",
+          "alto": 340,
+          "col_izq": 7
+        },
+        {
+          "tipo": "pie",
+          "titulo": "Ventas por Segmento",
+          "sub": "Participación por tipo de cliente",
+          "icono": "donut_small",
+          "sql": "SELECT Segment, SUM(Sales) AS Ventas FROM superstore GROUP BY Segment ORDER BY Ventas DESC",
+          "columna": "Segment",
+          "valores": "Ventas",
+          "alto": 340,
+          "col_izq": 5
+        },
+        {
+          "tipo": "bar",
+          "titulo": "Ventas por Categoría",
+          "sub": "Comparativo de categorías de producto",
+          "icono": "bar_chart",
+          "sql": "SELECT Category, SUM(Sales) AS Ventas FROM superstore GROUP BY Category ORDER BY Ventas DESC",
+          "x": "Category",
+          "y": "Ventas",
+          "alto": 320,
+          "col_izq": 6
+        },
+        {
+          "tipo": "bar",
+          "titulo": "Ventas por Región",
+          "sub": "Desempeño territorial",
+          "icono": "public",
+          "sql": "SELECT Region, SUM(Sales) AS Ventas FROM superstore GROUP BY Region ORDER BY Ventas DESC",
+          "x": "Region",
+          "y": "Ventas",
+          "alto": 320,
+          "col_izq": 6
+        }
+      ]
+    },
+    {
+      "id": "products",
+      "nombre": "Productos",
+      "icono": "📦",
+      "descripcion": "Análisis de catálogo, sub-categorías y productos estrella",
+      "material_icon": "inventory_2",
+      "breadcrumbs": "HOME  /  PRODUCTOS",
+      "kpis": [
+        {
+          "icono": "category",
+          "label": "Productos Únicos",
+          "sql": "SELECT COUNT(DISTINCT \"Product ID\") AS v FROM superstore",
+          "formato": "int",
+          "color": "#0f3a5f",
+          "sub_label": "SKU en catálogo"
+        },
+        {
+          "icono": "workspace_premium",
+          "label": "Mejor Categoría",
+          "sql": "SELECT Category AS v FROM superstore GROUP BY Category ORDER BY SUM(Sales) DESC LIMIT 1",
+          "formato": "str",
+          "color": "#0e7a5f",
+          "sub_label": "Mayor venta acumulada"
+        },
+        {
+          "icono": "shopping_cart",
+          "label": "Ticket Promedio",
+          "sql": "SELECT SUM(Sales) / COUNT(DISTINCT \"Order ID\") AS v FROM superstore",
+          "formato": "money",
+          "color": "#246bfd",
+          "sub_label": "Venta por pedido"
+        },
+        {
+          "icono": "warning",
+          "label": "Líneas con Pérdida",
+          "sql": "SELECT SUM(CASE WHEN Profit < 0 THEN 1 ELSE 0 END) AS v FROM superstore",
+          "formato": "int",
+          "color": "#b91c1c",
+          "sub_label": "Transacciones a pérdida"
+        }
+      ],
+      "graficos": [
+        {
+          "tipo": "bar_h",
+          "titulo": "Ventas por Sub-Categoría",
+          "sub": "Ranking horizontal de sub-categorías",
+          "icono": "leaderboard",
+          "sql": "SELECT \"Sub-Category\" AS SubCategoria, SUM(Sales) AS Ventas FROM superstore GROUP BY SubCategoria ORDER BY Ventas DESC",
+          "x": "SubCategoria",
+          "y": "Ventas",
+          "alto": 460,
+          "col_izq": 7
+        },
+        {
+          "tipo": "pie",
+          "titulo": "Utilidad por Categoría",
+          "sub": "Distribución de ganancia por categoría",
+          "icono": "donut_small",
+          "sql": "SELECT Category, SUM(Profit) AS Utilidad FROM superstore GROUP BY Category ORDER BY Utilidad DESC",
+          "columna": "Category",
+          "valores": "Utilidad",
+          "alto": 460,
+          "col_izq": 5
+        },
+        {
+          "tipo": "heatmap",
+          "titulo": "Ventas: Categoría × Región",
+          "sub": "Mapa de calor de ingresos",
+          "icono": "grid_view",
+          "sql": "SELECT Category, Region, SUM(Sales) AS Ventas FROM superstore GROUP BY Category, Region",
+          "x": "Category",
+          "y": "Region",
+          "valores": "Ventas",
+          "alto": 340
+        }
+      ],
+      "tablas": [
+        {
+          "titulo": "Top 10 Productos por Ventas",
+          "sub": "Los productos con mayor facturación",
+          "icono": "emoji_events",
+          "sql": "SELECT \"Product Name\" AS Producto, Category AS Categoría, SUM(Sales) AS Ventas, SUM(Profit) AS Utilidad, SUM(Quantity) AS Unidades FROM superstore GROUP BY 1, 2 ORDER BY Ventas DESC",
+          "limite": 10
+        }
+      ]
+    },
+    {
+      "id": "geography",
+      "nombre": "Clientes y Geografía",
+      "icono": "🌎",
+      "descripcion": "Distribución territorial y perfil de clientes",
+      "material_icon": "public",
+      "breadcrumbs": "HOME  /  CLIENTES Y GEOGRAFÍA",
+      "kpis": [
+        {
+          "icono": "groups",
+          "label": "Clientes Únicos",
+          "sql": "SELECT COUNT(DISTINCT \"Customer ID\") AS v FROM superstore",
+          "formato": "int",
+          "color": "#0f3a5f",
+          "sub_label": "Cartera de clientes"
+        },
+        {
+          "icono": "location_city",
+          "label": "Ciudades Atendidas",
+          "sql": "SELECT COUNT(DISTINCT City) AS v FROM superstore",
+          "formato": "int",
+          "color": "#246bfd",
+          "sub_label": "Cobertura urbana"
+        },
+        {
+          "icono": "map",
+          "label": "Estados Cubiertos",
+          "sql": "SELECT COUNT(DISTINCT \"State/Province\") AS v FROM superstore",
+          "formato": "int",
+          "color": "#0e7a5f",
+          "sub_label": "Presencia territorial"
+        },
+        {
+          "icono": "local_shipping",
+          "label": "Envío Estándar",
+          "sql": "SELECT ROUND(SUM(CASE WHEN \"Ship Mode\" = 'Standard Class' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) AS v FROM superstore",
+          "formato": "float",
+          "color": "#c2410c",
+          "sub_label": "% de líneas con envío estándar",
+          "sub_suffix": " %"
+        }
+      ],
+      "graficos": [
+        {
+          "tipo": "bar_h",
+          "titulo": "Top 10 Estados por Ventas",
+          "sub": "Mercados territoriales clave",
+          "icono": "leaderboard",
+          "sql": "SELECT \"State/Province\" AS Estado, SUM(Sales) AS Ventas FROM superstore GROUP BY Estado ORDER BY Ventas DESC LIMIT 10",
+          "x": "Estado",
+          "y": "Ventas",
+          "alto": 420,
+          "col_izq": 7
+        },
+        {
+          "tipo": "bar_stacked",
+          "titulo": "Ventas por Región y Segmento",
+          "sub": "Composición segmentada por territorio",
+          "icono": "stacked_bar_chart",
+          "sql": "SELECT Region, Segment, SUM(Sales) AS Ventas FROM superstore GROUP BY Region, Segment",
+          "x": "Region",
+          "y": "Ventas",
+          "stack_by": "Segment",
+          "alto": 420,
+          "col_izq": 5
+        },
+        {
+          "tipo": "bar",
+          "titulo": "Ventas por Modo de Envío",
+          "sub": "Preferencia logística del cliente",
+          "icono": "local_shipping",
+          "sql": "SELECT \"Ship Mode\" AS Envio, SUM(Sales) AS Ventas FROM superstore GROUP BY Envio ORDER BY Ventas DESC",
+          "x": "Envio",
+          "y": "Ventas",
+          "alto": 320
+        }
+      ],
+      "tablas": [
+        {
+          "titulo": "Top 10 Ciudades por Ventas",
+          "sub": "Mercados urbanos con mayor facturación",
+          "icono": "location_city",
+          "sql": "SELECT City AS Ciudad, \"State/Province\" AS Estado, SUM(Sales) AS Ventas, SUM(Profit) AS Utilidad FROM superstore GROUP BY 1, 2 ORDER BY Ventas DESC",
+          "limite": 10
+        }
+      ]
+    },
+    {
+      "id": "profitability",
+      "nombre": "Rentabilidad",
+      "icono": "💰",
+      "descripcion": "Análisis de márgenes, pérdidas e impacto de descuentos",
+      "material_icon": "monitoring",
+      "breadcrumbs": "HOME  /  RENTABILIDAD",
+      "kpis": [
+        {
+          "icono": "account_balance",
+          "label": "Utilidad Total",
+          "sql": "SELECT SUM(Profit) AS v FROM superstore",
+          "formato": "money",
+          "color": "#0e7a5f",
+          "sub_label": "Ganancia neta acumulada"
+        },
+        {
+          "icono": "insights",
+          "label": "Margen Promedio por Línea",
+          "sql": "SELECT ROUND(AVG(Profit), 2) AS v FROM superstore",
+          "formato": "money",
+          "color": "#246bfd",
+          "sub_label": "Utilidad media por transacción"
+        },
+        {
+          "icono": "arrow_downward",
+          "label": "Pérdida en Líneas Negativas",
+          "sql": "SELECT ABS(SUM(CASE WHEN Profit < 0 THEN Profit ELSE 0 END)) AS v FROM superstore",
+          "formato": "money",
+          "color": "#b91c1c",
+          "sub_label": "Fuga de rentabilidad (valor absoluto)"
+        },
+        {
+          "icono": "percent",
+          "label": "Descuento Máximo",
+          "sql": "SELECT ROUND(MAX(Discount) * 100, 1) AS v FROM superstore",
+          "formato": "float",
+          "color": "#b45309",
+          "sub_suffix": " %",
+          "sub_label": "Mayor descuento otorgado"
+        }
+      ],
+      "graficos": [
+        {
+          "tipo": "bar",
+          "titulo": "Utilidad por Sub-Categoría",
+          "sub": "Rentabilidad detallada (incluye pérdidas)",
+          "icono": "bar_chart",
+          "sql": "SELECT \"Sub-Category\" AS SubCategoria, SUM(Profit) AS Utilidad FROM superstore GROUP BY SubCategoria ORDER BY Utilidad DESC",
+          "x": "SubCategoria",
+          "y": "Utilidad",
+          "alto": 380,
+          "col_izq": 7
+        },
+        {
+          "tipo": "line",
+          "titulo": "Tendencia Mensual de Utilidad",
+          "sub": "Evolución de ganancia neta por mes",
+          "icono": "show_chart",
+          "sql": "SELECT date_trunc('month', \"Order Date\") AS Mes, SUM(Profit) AS Utilidad FROM superstore GROUP BY Mes ORDER BY Mes",
+          "x": "Mes",
+          "y": "Utilidad",
+          "alto": 380,
+          "col_izq": 5
+        },
+        {
+          "tipo": "scatter",
+          "titulo": "Descuento vs Utilidad",
+          "sub": "Impacto del descuento sobre la ganancia (por línea)",
+          "icono": "scatter_plot",
+          "sql": "SELECT Discount, Profit, Category FROM superstore",
+          "x": "Discount",
+          "y": "Profit",
+          "color": "Category",
+          "alto": 380
+        },
+        {
+          "tipo": "bar_grouped",
+          "titulo": "Utilidad por Categoría y Año",
+          "sub": "Comparativo anual por categoría",
+          "icono": "stacked_bar_chart",
+          "sql": "SELECT CAST(year(\"Order Date\") AS VARCHAR) AS Año, Category, SUM(Profit) AS Utilidad FROM superstore GROUP BY Año, Category ORDER BY Año",
+          "x": "Año",
+          "y": "Utilidad",
+          "group_by": "Category",
+          "alto": 340
+        }
+      ]
+    }
+  ]
+}
