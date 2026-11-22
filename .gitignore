@@ -77,6 +77,9 @@ screenshots/
 # uv lock files
 uv.lock
 
+# Build artifacts (wheel packages)
+build_mcp/
+
 # Uploaded data and manifests
 data_uploaded/
 app_base/data_uploaded/
