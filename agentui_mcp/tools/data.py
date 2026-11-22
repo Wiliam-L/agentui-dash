@@ -6,11 +6,14 @@ Tools: create_dashboard, upload_csv, upload_multiple_csvs,
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from fastmcp import FastMCP
 
 from agentui_mcp.utils import CONFIG_PATH, FileWrapper
+
+_logger = logging.getLogger("mcp.data")
 
 from app_base.core.data import (
     close_con,
@@ -75,8 +78,30 @@ def register_data_tools(mcp: FastMCP) -> None:
         config["titulo_pagina"] = dashboard_name
         config["brand_name"] = dashboard_name
 
+        _logger.info(f"Generated config with {len(config.get('modulos', []))} modules, saving to {CONFIG_PATH}")
+
         # Step 5: Validate and save
-        _update_ui_config(config, CONFIG_PATH)
+        result = _update_ui_config(config, CONFIG_PATH)
+        _logger.info(f"_update_ui_config result: {result[:200]}")
+
+        # Check for validation errors first (these prevent the file from being saved)
+        if result.startswith("Validation failed") or result.startswith("SQL validation failed"):
+            _logger.error(f"Config validation failed: {result}")
+            return (
+                "❌ Error: Failed to save dashboard config. The generated SQL or structure is invalid.\n\n"
+                f"Details:\n{result}\n\n"
+                "Please try again with a different file or check the data structure."
+            )
+
+        # Check if config file was actually created (catches silent write failures)
+        if not CONFIG_PATH.exists():
+            _logger.error(f"Config file was NOT created at {CONFIG_PATH} after _update_ui_config!")
+            return (
+                "❌ Error: Dashboard config was not saved. The file was not created.\n\n"
+                f"Expected path: {CONFIG_PATH}\n"
+                f"Result message: {result}\n\n"
+                "This may be a permissions issue. Please check that the application has write access to the config directory."
+            )
 
         # Step 6: Build summary
         n_modules = len(config.get("modulos", []))
