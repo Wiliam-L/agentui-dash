@@ -91,9 +91,11 @@ def _launch_streamlit(port: int = 8501) -> tuple[bool, str]:
             start_new_session=(sys.platform != "win32"),
         )
 
-        # Close our reference to the log file handle so the child process
-        # owns it exclusively. The detached process keeps running.
-        log_fh.close()
+        # IMPORTANT: Do NOT close log_fh here. On Windows with DETACHED_PROCESS,
+        # closing the parent's copy of the stdout handle causes the child process
+        # to receive a broken pipe (EBADF) when it tries to write, killing it
+        # silently. The detached process inherits its own copy of the handle,
+        # so leaving ours open is safe — the OS will close it when this process exits.
 
         # We can't track the process directly since it's detached.
         # Instead, we track by port number.
@@ -101,13 +103,13 @@ def _launch_streamlit(port: int = 8501) -> tuple[bool, str]:
         set_streamlit_started_by_mcp(True)
         set_streamlit_port(port)
 
-        # Wait until the server is actually responding (up to 30 seconds)
+        # Wait until the server is actually responding (up to 30 seconds).
+        # We only check the port — _is_streamlit_running() also uses socket connect,
+        # so checking it here is redundant and causes false negatives when Streamlit
+        # is still starting up (process alive but port not yet bound).
         started = False
         for _ in range(60):  # 60 * 0.5s = 30s max wait
             time.sleep(0.5)
-            if not _is_streamlit_running():
-                log_fh.close()
-                return False, f"Streamlit process exited during startup. Check {log_file}"
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as test_sock:
                     test_sock.settimeout(1)
@@ -120,7 +122,6 @@ def _launch_streamlit(port: int = 8501) -> tuple[bool, str]:
         if started:
             return True, f"Streamlit started and ready on port {port}"
         else:
-            log_fh.close()
             return False, f"Streamlit not responding on port {port} after 30s. Check {log_file}"
 
     except Exception as e:

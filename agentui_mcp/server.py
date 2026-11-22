@@ -24,7 +24,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 from fastmcp import FastMCP
 
 from agentui_mcp.instructions import MCP_INSTRUCTIONS
-from agentui_mcp.tools.streamlit import register_streamlit_tools, _launch_streamlit
+from agentui_mcp.tools.streamlit import register_streamlit_tools
 from agentui_mcp.tools.data import register_data_tools
 from agentui_mcp.tools.config import register_config_tools
 from agentui_mcp.tools.query import register_query_tools
@@ -55,14 +55,10 @@ register_audit_tools(mcp)
 
 def main():
     """Entry point for the agentui-mcp command."""
-    # Start Streamlit server immediately so the dashboard is available from the beginning
-    port = int(os.environ.get("AGENTUI_PORT", "8501"))
-    success, msg = _launch_streamlit(port)
-    if success:
-        print(f"Streamlit started: http://localhost:{port}", flush=True)
-    else:
-        print(f"Streamlit warning: {msg}", flush=True)
-
+    # Do NOT start Streamlit here — the dashboard config (ui_config.json) and
+    # database don't exist yet. Streamlit should only be launched AFTER the LLM
+    # agent has generated the dashboard via create_dashboard(). The agent will
+    # call start_streamlit() when ready.
     print("Starting MCP server (stdio transport)...", flush=True)
     mcp.run(transport="stdio")
 
