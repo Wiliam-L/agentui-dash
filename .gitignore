@@ -91,6 +91,9 @@ app_base/manifest.json
 # Runtime DuckDB databases in app_base
 app_base/*.duckdb
 
+# Generated UI config (created by MCP at runtime)
+app_base/ui_config.json
+
 # Large data files (sample data for testing, not source code)
 # Allow examples to be tracked
 *.csv
