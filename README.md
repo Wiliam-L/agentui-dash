@@ -62,7 +62,24 @@ La ventaja es directa: el mismo sistema sirve para ventas, inventario, logístic
 
 ## Instalación
 
-Requisitos: **Python 3.10+** y [**uv**](https://astral.sh/uv) (`pip install uv`).
+Requisitos: [**uv**](https://astral.sh/uv) (`pip install uv`). `uv` descarga Python automáticamente si no lo tienes instalado.
+
+### Opción A: Desde el paquete pre-construido (recomendado)
+
+Descarga el archivo `.whl` desde `build_mcp/` e instálalo globalmente:
+
+```powershell
+uv tool install agentui_dash-0.1.0-py3-none-any.whl
+```
+
+Después de instalar, dos comandos están disponibles globalmente:
+
+| Comando | Descripción |
+|---|---|
+| `ui` | Inicia el dashboard Streamlit |
+| `agentui-mcp` | Inicia el servidor MCP para IA |
+
+### Opción B: Desde el código fuente
 
 Desde la raíz del repositorio:
 
@@ -114,6 +131,20 @@ Claude Desktop (`~/.claude/claude_desktop_config.json`):
 
 En Cursor: `Ctrl+Shift+P` → *Cursor: Manage MCP Servers*.
 En Windsurf: *Settings* → *MCP Servers*.
+
+### Opencode
+
+Si instalaste el paquete con `uv tool install`, agrega el servidor MCP con:
+
+```powershell
+opencode mcp add agentui-dash --global -- agentui-mcp
+```
+
+Verifica que el servidor aparece en la lista:
+
+```powershell
+opencode mcp list
+```
 
 Una vez conectado, basta con decirle al agente:
 
