@@ -76,7 +76,7 @@ Usuario  →  Agente IA  →  MCP Server  →  ui_config.json  →  Streamlit UI
 - **Actualización de datos** — el dashboard incluye un file uploader para que el cliente actualice los datos sin depender del agente.
 - **Docker** — entrega el dashboard como contenedor aislado: `docker compose up --build`.
 - **Recarga en caliente** — el agente puede modificar KPIs o gráficos en tiempo real sin reiniciar Streamlit.
-- **JSON independiente del frontend** — el contrato `ui_config.json` no depende de Streamlit. Hoy se renderiza con Streamlit, mañana con React o cualquier otro framework.
+- **JSON como contrato** — `ui_config.json` define la estructura del dashboard (módulos, KPIs, gráficos, filtros). Cualquier frontend que conozca este esquema puede consumirlo, no solo Streamlit.
 
 ## Herramientas MCP
 
