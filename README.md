@@ -18,7 +18,7 @@ Para **freelancers y agencias** que crean dashboards para clientes.
 
 ## Quickstart
 
-**Paso 1 — Instalar uv** (descarga Python automáticamente)
+**Paso 1 — Instalar uv**
 
 **Windows:**
 ```powershell
