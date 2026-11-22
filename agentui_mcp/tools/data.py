@@ -35,16 +35,16 @@ def register_data_tools(mcp: FastMCP) -> None:
 
         This is the MAIN entry point for users. It handles the entire workflow:
         uploads the CSV, detects columns, generates KPIs, charts, and filters,
-        and saves the configuration. The Streamlit UI will render automatically.
+        and saves the configuration. The Streamlit UI (already running) will
+        auto-refresh to display the new dashboard.
 
         Args:
             file_path: Absolute path to the CSV/Excel file on disk.
             dashboard_name: Optional title for the dashboard (default: "Dashboard").
 
         Returns:
-            Summary of what was created (KPIs, charts, filters) and confirmation.
+            Summary of what was created (KPIs, charts, filters) and the dashboard URL.
         """
-        from agentui_mcp.tools.streamlit import start_streamlit as _start_streamlit
         from agentui_mcp.utils import get_streamlit_port
 
         path = Path(file_path)
@@ -90,9 +90,7 @@ def register_data_tools(mcp: FastMCP) -> None:
             total_charts += len(mod.get("graficos", []))
             total_tables += len(mod.get("tablas", []))
 
-        # Step 7: Start Streamlit server automatically
-        _start_streamlit()
-
+        # Streamlit is already running from MCP startup — just return the URL
         dashboard_url = f"http://localhost:{get_streamlit_port()}"
 
         summary = (

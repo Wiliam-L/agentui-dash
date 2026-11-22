@@ -95,7 +95,7 @@ def style_chart(fig, height: int = 330, hover: str = None):
             color=colors["font"],
             size=13,
         ),
-        margin=dict(l=10, r=10, t=8, b=10),
+        margin=dict(l=10, r=10, t=8, b=40),
         legend=dict(
             orientation="h",
             yanchor="bottom",
@@ -103,6 +103,10 @@ def style_chart(fig, height: int = 330, hover: str = None):
             xanchor="right",
             x=1,
             title_text="",
+        ),
+        xaxis=dict(
+            tickangle=-45,
+            tickfont=dict(size=11),
         ),
     )
     fig.update_xaxes(showgrid=False, linecolor=colors["line"], zeroline=False)

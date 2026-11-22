@@ -10,7 +10,6 @@ dependencies = [
     "plotly>=5.0.0",
     "openpyxl>=3.1.0",
     "python-calamine>=0.8.0",
-    "reportlab>=4.0.0",
     "kaleido>=1.0.0",
     "fastmcp>=2.0.0",
     "sqlglot>=30.33.0",

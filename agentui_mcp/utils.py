@@ -39,10 +39,20 @@ def _find_free_port(start_port: int = 8501, max_attempts: int = 10) -> int:
 
 
 def _is_streamlit_running() -> bool:
-    """Check if the tracked Streamlit process is still running."""
-    if _streamlit_process is None:
-        return False
-    return _streamlit_process.poll() is None
+    """Check if Streamlit is running on the tracked port.
+
+    Since Streamlit is now a detached process, we check by port instead
+    of by process reference. This ensures the check works even after the
+    MCP server restarts.
+    """
+    import socket
+    port = get_streamlit_port()
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.connect(("localhost", port))
+            return True
+        except (OSError, ConnectionRefusedError):
+            return False
 
 
 def get_streamlit_port() -> int:

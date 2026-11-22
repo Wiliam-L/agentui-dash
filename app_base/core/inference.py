@@ -334,7 +334,7 @@ def _generate_generic_modules(
     modules: list[dict] = [{
         "id": "explorer",
         "nombre": "Data Explorer",
-        "icono": "🔍",
+        "icono": "search",
         "descripcion": "Auto-generated dashboard — explore your data with KPIs, charts, and filters.",
         "material_icon": "insights",
         "breadcrumbs": "HOME  /  DATA EXPLORER",
@@ -605,7 +605,7 @@ def _generate_sales_modules(col_map: dict[str, str], table_name: str) -> list[di
     modules.append({
         "id": "overview",
         "nombre": "Overview",
-        "icono": "\U0001f4ca",
+        "icono": "dashboard",
         "descripcion": f"Summary of {amount_lbl.lower()} data.",
         "material_icon": "dashboard",
         "breadcrumbs": "HOME  /  OVERVIEW",
@@ -707,7 +707,7 @@ def _generate_sales_modules(col_map: dict[str, str], table_name: str) -> list[di
         modules.append({
             "id": "details",
             "nombre": "Details",
-            "icono": "\U0001f3ea",
+            "icono": "insights",
             "descripcion": f"Detailed breakdown by {', '.join(lbl for lbl in [shift_lbl, cashier_lbl, method_lbl] if lbl != 'Shift' or shift)}.",
             "material_icon": "insights",
             "breadcrumbs": "HOME  /  DETAILS",
@@ -841,7 +841,7 @@ def _generate_inventory_modules(col_map: dict[str, str], table_name: str) -> lis
     return [{
         "id": "inventory",
         "nombre": "Inventory",
-        "icono": "\U0001f4e6",
+        "icono": "inventory_2",
         "descripcion": f"{stock_lbl} levels and margin analysis.",
         "material_icon": "inventory_2",
         "breadcrumbs": "HOME  /  INVENTORY",
@@ -970,7 +970,7 @@ def _generate_customers_modules(col_map: dict[str, str], table_name: str) -> lis
     return [{
         "id": "contacts",
         "nombre": "Contacts",
-        "icono": "\U0001f465",
+        "icono": "groups",
         "descripcion": f"Records segmentation by {', '.join(lbl for lbl in [seg_lbl, state_lbl, channel_lbl] if lbl not in ('Segment', 'Region', 'Channel')) or 'available columns'}.",
         "material_icon": "groups",
         "breadcrumbs": "HOME  /  CONTACTS",

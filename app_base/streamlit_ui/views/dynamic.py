@@ -80,22 +80,20 @@ def render(modulo_config: dict, filter_config: list[dict] | None = None,
     page_header(material_icon, name, breadcrumbs, description)
     errors_before = error_count()
 
-    # --- KPIs (max 4 per row, equal height) ---
+    # --- KPIs (responsive flex row) ---
     kpis = modulo_config.get("kpis", [])
     if kpis:
         KPI_PER_ROW = 4
         for batch_start in range(0, len(kpis), KPI_PER_ROW):
             batch = kpis[batch_start:batch_start + KPI_PER_ROW]
-            # Collect all KPI HTML first, then wrap in flex container
             kpi_htmls = []
             for kpi_cfg in batch:
                 val = execute_kpi(kpi_cfg, filter_config, filter_values)
                 formatted = _format_value(val, kpi_cfg.get("formato", "number"))
                 sub = _build_sub_label(kpi_cfg, filter_config, filter_values)
                 color = kpi_cfg.get("color", "#246bfd")
-                kpi_htmls.append(kpi(kpi_cfg["icono"], kpi_cfg["label"], formatted, sub, color))
-            # Wrap in flex row so all cards have equal height
-            row_html = '<div style="display:flex;gap:16px;">' + "".join(kpi_htmls) + '</div>'
+                kpi_htmls.append(kpi(kpi_cfg.get("icono", "insights"), kpi_cfg.get("label", ""), formatted, sub, color))
+            row_html = '<div class="kpi-row">' + "".join(kpi_htmls) + '</div>'
             st.markdown(row_html, unsafe_allow_html=True)
             st.markdown('<div style="height:6px;"></div>', unsafe_allow_html=True)
 

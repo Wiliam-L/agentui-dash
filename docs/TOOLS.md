@@ -1,6 +1,6 @@
 # Herramientas MCP
 
-AgentUI Dash expone **29 herramientas MCP públicas** accesibles por cualquier agente de IA. Todo SQL se valida con `safe_sql()` (sqlglot), la estructura JSON con `validate_config()`, y la consistencia de cálculos con `cross_validate_config()`.
+AgentUI Dash expone **30 herramientas MCP públicas** accesibles por cualquier agente de IA. Todo SQL se valida con `safe_sql()` (sqlglot), la estructura JSON con `validate_config()`, y la consistencia de cálculos con `cross_validate_config()`.
 
 ## Dashboard
 
@@ -14,8 +14,6 @@ AgentUI Dash expone **29 herramientas MCP públicas** accesibles por cualquier a
 |---|---|
 | `upload_csv` | Cargar un archivo CSV/Excel; crea una tabla única por archivo |
 | `upload_multiple_csvs` | Cargar múltiples archivos; cada uno obtiene su propia tabla |
-| `update_data` | Actualizar una tabla existente con validación de columnas |
-| `analyze_relationships` | Detectar relaciones entre tablas cargadas (mismo esquema, columnas comunes, sin relación) |
 | `preview_table` | Previsualizar las primeras 10 filas de una tabla |
 | `list_tables` | Listar todas las tablas disponibles |
 | `get_table_columns` | Obtener nombres y tipos de columna de una tabla |

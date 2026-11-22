@@ -4,14 +4,16 @@ Tools: start_streamlit, stop_streamlit, check_streamlit_status
 """
 from __future__ import annotations
 
+import os
+import socket
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 from fastmcp import FastMCP
 
 from agentui_mcp.utils import (
-    _PROJECT_ROOT,
     _is_streamlit_running,
     get_streamlit_port,
     get_streamlit_process,
@@ -20,6 +22,138 @@ from agentui_mcp.utils import (
     set_streamlit_process,
     set_streamlit_started_by_mcp,
 )
+
+
+def _launch_streamlit(port: int = 8501) -> tuple[bool, str]:
+    """Launch Streamlit server in the background and wait until it responds.
+
+    Returns (success, message) tuple. This function blocks until Streamlit
+    is actually responding on the port (up to 30 seconds), ensuring the
+    dashboard is available before the MCP server accepts tool calls.
+    """
+    # Check if already running
+    if _is_streamlit_running():
+        return True, f"Streamlit already running on port {get_streamlit_port()}"
+
+    # Check if port is in use by another process
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("localhost", port))
+        except OSError:
+            return False, f"Port {port} is already in use"
+
+    # Locate the Streamlit script
+    script_path, cwd = _find_streamlit_script()
+    if not script_path.exists():
+        return False, f"Streamlit script not found at {script_path}"
+
+    host = os.environ.get("AGENTUI_HOST", "127.0.0.1")
+    cmd = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        str(script_path),
+        f"--server.address={host}",
+        f"--server.port={port}",
+        "--theme.base=light",
+        "--theme.primaryColor=#246bfd",
+        "--theme.backgroundColor=#f8fafc",
+        "--theme.secondaryBackgroundColor=#ffffff",
+        "--theme.textColor=#0f172a",
+        "--server.headless=true",
+    ]
+
+    try:
+        log_file = Path(cwd) / "streamlit.log"
+        # Keep the log file handle open by passing it directly to Popen
+        # instead of using a context manager that closes it immediately.
+        log_fh = open(log_file, "w")
+
+        # DETACHED process flags: Streamlit survives when the MCP server exits.
+        # On Windows: CREATE_NEW_PROCESS_GROUP + DETACHED_PROCESS makes it independent.
+        # On Unix: start_new_session=True detaches from the parent process group.
+        if sys.platform == "win32":
+            creation_flags = (
+                subprocess.CREATE_NO_WINDOW
+                | subprocess.CREATE_NEW_PROCESS_GROUP
+                | 0x00000008  # DETACHED_PROCESS
+            )
+        else:
+            creation_flags = 0
+
+        proc = subprocess.Popen(
+            cmd,
+            stdout=log_fh,
+            stderr=subprocess.STDOUT,
+            cwd=str(cwd),
+            creationflags=creation_flags,
+            start_new_session=(sys.platform != "win32"),
+        )
+
+        # Close our reference to the log file handle so the child process
+        # owns it exclusively. The detached process keeps running.
+        log_fh.close()
+
+        # We can't track the process directly since it's detached.
+        # Instead, we track by port number.
+        set_streamlit_process(None)
+        set_streamlit_started_by_mcp(True)
+        set_streamlit_port(port)
+
+        # Wait until the server is actually responding (up to 30 seconds)
+        started = False
+        for _ in range(60):  # 60 * 0.5s = 30s max wait
+            time.sleep(0.5)
+            if not _is_streamlit_running():
+                log_fh.close()
+                return False, f"Streamlit process exited during startup. Check {log_file}"
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as test_sock:
+                    test_sock.settimeout(1)
+                    test_sock.connect(("localhost", port))
+                    started = True
+                    break
+            except (OSError, ConnectionRefusedError):
+                continue
+
+        if started:
+            return True, f"Streamlit started and ready on port {port}"
+        else:
+            log_fh.close()
+            return False, f"Streamlit not responding on port {port} after 30s. Check {log_file}"
+
+    except Exception as e:
+        return False, f"Error starting Streamlit: {e}"
+
+
+def _find_streamlit_script() -> tuple[Path, Path]:
+    """Locate the Streamlit main.py script and its working directory.
+
+    Returns (script_path, cwd) where script_path is the main.py file
+    and cwd is the directory where Streamlit should be launched from.
+
+    This works for both installed packages (wheel) and development mode
+    (editable install or running from repo root).
+    """
+    # The main.py lives inside app_base/streamlit_ui/main.py relative to
+    # the installed package. We resolve it via the app_base package.
+    try:
+        import app_base.streamlit_ui.main as main_module
+        script_path = Path(main_module.__file__).resolve()
+        project_root = script_path.parent.parent  # app_base/
+        # If app_base is inside a repo root (has sibling app_base/), use repo root as cwd
+        repo_root = project_root.parent if (project_root.parent / "app_base").is_dir() else project_root
+        return script_path, repo_root
+    except ImportError:
+        # Fallback: look relative to this file (agentui_mcp/tools/streamlit.py)
+        # In a wheel: agentui_mcp and app_base are siblings in site-packages
+        this_file = Path(__file__).resolve()
+        # agentui_mcp/tools/streamlit.py -> agentui_mcp/ -> site-packages/ -> app_base/
+        site_packages = this_file.parent.parent.parent
+        app_base_dir = site_packages / "app_base"
+        script_path = app_base_dir / "streamlit_ui" / "main.py"
+        return script_path, site_packages
 
 
 def register_streamlit_tools(mcp: FastMCP) -> None:
@@ -47,72 +181,28 @@ def register_streamlit_tools(mcp: FastMCP) -> None:
                 f"Open this URL in your browser to view the dashboard."
             )
 
-        # Check if port is in use by another process
-        import socket
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(("localhost", port))
-            except OSError:
-                return (
-                    f"⚠️ Port {port} is already in use by another process.\n\n"
-                    f"Try a different port or stop the existing process first.\n"
-                    f"You can check with: check_streamlit_status()"
-                )
+        # Launch Streamlit (_launch_streamlit already waits until ready)
+        success, msg = _launch_streamlit(port)
+        if not success:
+            return f"❌ {msg}"
 
-        # Find python executable (prefer venv if available)
-        venv_python = _PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
-        if venv_python.exists():
-            python_exe = str(venv_python)
-        else:
-            python_exe = sys.executable
-
-        streamlit_main = _PROJECT_ROOT / "streamlit_ui" / "main.py"
-
-        # Start Streamlit in background
-        try:
-            log_file = _PROJECT_ROOT / "streamlit.log"
-            with open(log_file, "w") as log:
-                set_streamlit_process(subprocess.Popen(
-                    [
-                        python_exe, "-m", "streamlit", "run",
-                        str(streamlit_main),
-                        "--server.port", str(port),
-                        "--server.headless", "true",
-                    ],
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    cwd=str(_PROJECT_ROOT),
-                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-                ))
-            set_streamlit_started_by_mcp(True)
-            set_streamlit_port(port)
-
-            # Give it a moment to start
-            time.sleep(2)
-
-            if _is_streamlit_running():
-                url = f"http://localhost:{port}"
-                return (
-                    f"✅ Streamlit server started successfully!\n\n"
-                    f"URL: {url}\n\n"
-                    f"📌 IMPORTANT: Please open this URL in your browser:\n"
-                    f"  {url}\n\n"
-                    f"The dashboard will auto-refresh every 3 seconds when the config changes.\n"
-                    f"Tell the user to open the link above to see their dashboard."
-                )
-            else:
-                return (
-                    f"❌ Streamlit server failed to start.\n\n"
-                    f"Check the log file: {log_file}\n"
-                    f"Error: Process exited immediately."
-                )
-
-        except Exception as e:
-            return f"❌ Error starting Streamlit: {e}"
+        url = f"http://localhost:{port}"
+        return (
+            f"✅ Streamlit server started and ready!\n\n"
+            f"URL: {url}\n\n"
+            f"📌 IMPORTANT: Open this URL in the user's browser:\n"
+            f"  {url}\n\n"
+            f"The dashboard auto-refreshes every 3 seconds when the config changes.\n"
+            f"Tell the user: 'Your dashboard is ready. Open it at: {url}'\n"
+            f"If you have browser tools available, navigate to {url} to verify."
+        )
 
     @mcp.tool()
     def stop_streamlit() -> str:
         """Stop the Streamlit dashboard server.
+
+        ⚠️  WARNING: This will make the dashboard unavailable to the user.
+        Only use this if the user explicitly asks to stop the dashboard.
 
         Returns:
             Confirmation message.
@@ -120,22 +210,39 @@ def register_streamlit_tools(mcp: FastMCP) -> None:
         if not _is_streamlit_running():
             return "Streamlit server is not running."
 
+        port = get_streamlit_port()
         try:
-            proc = get_streamlit_process()
-            proc.terminate()
-            proc.wait(timeout=5)
-            set_streamlit_process(None)
-            set_streamlit_started_by_mcp(False)
-            return "✅ Streamlit server stopped successfully."
-        except subprocess.TimeoutExpired:
-            try:
-                proc = get_streamlit_process()
-                proc.kill()
-                set_streamlit_process(None)
+            # Find and kill the process listening on the Streamlit port
+            # Since Streamlit is a detached process, we can't use the process reference.
+            # Instead, we find the PID by port and kill it.
+            result = subprocess.run(
+                ["netstat", "-ano"],
+                capture_output=True, text=True, timeout=5
+            )
+            pids_to_kill = set()
+            for line in result.stdout.splitlines():
+                if f":{port}" in line and "LISTENING" in line:
+                    parts = line.split()
+                    if len(parts) >= 5:
+                        pid = parts[-1]
+                        try:
+                            pids_to_kill.add(int(pid))
+                        except ValueError:
+                            pass
+
+            if pids_to_kill:
+                for pid in pids_to_kill:
+                    try:
+                        subprocess.run(
+                            ["taskkill", "/F", "/PID", str(pid)],
+                            capture_output=True, timeout=5
+                        )
+                    except Exception:
+                        pass
                 set_streamlit_started_by_mcp(False)
-                return "✅ Streamlit server force-stopped."
-            except Exception as e:
-                return f"Error stopping Streamlit: {e}"
+                return f"✅ Streamlit server stopped successfully (port {port})."
+            else:
+                return f"Streamlit is not listening on port {port}."
         except Exception as e:
             return f"Error stopping Streamlit: {e}"
 

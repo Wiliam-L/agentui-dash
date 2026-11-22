@@ -12,6 +12,7 @@ Usage:
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -23,7 +24,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 from fastmcp import FastMCP
 
 from agentui_mcp.instructions import MCP_INSTRUCTIONS
-from agentui_mcp.tools.streamlit import register_streamlit_tools
+from agentui_mcp.tools.streamlit import register_streamlit_tools, _launch_streamlit
 from agentui_mcp.tools.data import register_data_tools
 from agentui_mcp.tools.config import register_config_tools
 from agentui_mcp.tools.query import register_query_tools
@@ -32,6 +33,7 @@ from agentui_mcp.tools.detection import register_detection_tools
 from agentui_mcp.tools.validation import register_validation_tools
 from agentui_mcp.tools.preview import register_preview_tools
 from agentui_mcp.tools.chart_builder import register_chart_builder_tools
+from agentui_mcp.tools.audit import register_audit_tools
 
 
 mcp = FastMCP(
@@ -49,9 +51,18 @@ register_detection_tools(mcp)
 register_validation_tools(mcp)
 register_preview_tools(mcp)
 register_chart_builder_tools(mcp)
+register_audit_tools(mcp)
 
 def main():
     """Entry point for the agentui-mcp command."""
+    # Start Streamlit server immediately so the dashboard is available from the beginning
+    port = int(os.environ.get("AGENTUI_PORT", "8501"))
+    success, msg = _launch_streamlit(port)
+    if success:
+        print(f"Streamlit started: http://localhost:{port}", flush=True)
+    else:
+        print(f"Streamlit warning: {msg}", flush=True)
+
     print("Starting MCP server (stdio transport)...", flush=True)
     mcp.run(transport="stdio")
 
