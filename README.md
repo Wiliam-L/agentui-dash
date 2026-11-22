@@ -62,7 +62,21 @@ La ventaja es directa: el mismo sistema sirve para ventas, inventario, logístic
 
 ## Instalación
 
-Requisitos: [**uv**](https://astral.sh/uv) (`pip install uv`). `uv` descarga Python automáticamente si no lo tienes instalado.
+Requisito único: [**uv**](https://astral.sh/uv). `uv` descarga e instala Python 3.11+ automáticamente si no lo tienes.
+
+### Instalar uv
+
+**Windows (PowerShell):**
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**macOS / Linux:**
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
 ### Opción A: Desde el paquete pre-construido (recomendado)
 
