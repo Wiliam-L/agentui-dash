@@ -1,79 +1,76 @@
-# Architecture
+# Arquitectura
 
-## Overview
+## Resumen
 
-AgentUI Dash follows the **Dumb Skeleton** pattern: the UI and data layer are blind to column names. All intelligence lives in `core/inference.py`, and all state is described in a single file — `ui_config.json` — written by the MCP server.
+AgentUI Dash sigue el patrón **Dumb Skeleton**: la UI y la capa de datos son ignorantes de los nombres de columna. Toda la inteligencia vive en `core/inference.py`, y todo el estado se describe en un solo archivo — `ui_config.json` — escrito por el servidor MCP.
 
 ```
-User  →  AI Agent  →  MCP Server  →  ui_config.json  →  Streamlit UI  →  DuckDB
+Usuario  →  Agente IA  →  MCP Server  →  ui_config.json  →  Streamlit UI  →  DuckDB
 ```
 
-## Workflow
+## Flujo de trabajo
 
-1. **User** provides a data file (CSV or Excel) to the AI agent.
-2. **Agent** calls `create_dashboard()`, which chains: ingest → column detection → KPIs → charts → filters → config save.
-3. **MCP Server** detects column roles, generates SQL, and atomically writes `ui_config.json`.
-4. **ui_config.json** is the contract: modules, global filters, KPIs with SQL, chart specs, and column mapping.
-5. **Streamlit UI** watches the JSON modification timestamp and auto-refreshes when it changes (no server restart).
-6. **DuckDB** executes queries with ephemeral read-only connections.
+1. **Usuario** proporciona un archivo de datos (CSV o Excel) al agente de IA.
+2. **Agente** llama a `create_dashboard()`, que encadena: ingesta → detección de columnas → KPIs → gráficos → filtros → guardar config.
+3. **MCP Server** detecta los roles de columna, genera SQL y escribe de forma atómica `ui_config.json`.
+4. **ui_config.json** es el contrato: módulos, filtros globales, KPIs con SQL, especificaciones de gráficos y mapeo de columnas.
+5. **Streamlit UI** observa el timestamp de modificación del JSON y se auto-refresca cuando cambia (sin reiniciar el servidor).
+6. **DuckDB** ejecuta las consultas con conexiones efímeras de solo lectura.
 
-## Components
+## Componentes
 
-| Component | Role | Technology |
+| Componente | Rol | Tecnología |
 |---|---|---|
-| `app_base/streamlit_ui/` | Reactive UI that renders `ui_config.json` | Streamlit, Plotly, CSS |
-| `app_base/core/data.py` | Raw data layer: ingest and SQL execution | DuckDB, pandas |
-| `app_base/core/tools.py` | JSON ↔ DuckDB bridge: validates, saves, executes | Python |
-| `app_base/core/inference.py` | Intelligence: maps physical columns to logical roles | Python |
-| `app_base/core/chart_builder.py` | Chart construction and Plotly styling | Plotly |
-| `app_base/ui_config.json` | Complete dashboard contract | JSON |
-| `agentui_mcp/server.py` | MCP server exposed to the AI agent | FastMCP |
-| `agentui_mcp/tools/` | Categorized MCP tool implementations | Python |
+| `app_base/streamlit_ui/` | UI reactiva que renderiza `ui_config.json` | Streamlit, Plotly, CSS |
+| `app_base/core/data.py` | Capa de datos: ingesta y ejecución SQL | DuckDB, pandas |
+| `app_base/core/tools.py` | Puente JSON ↔ DuckDB: valida, guarda, ejecuta | Python |
+| `app_base/core/inference.py` | Inteligencia: mapea columnas físicas a roles lógicos | Python |
+| `app_base/core/chart_builder.py` | Construcción de gráficos y estilo Plotly | Plotly |
+| `app_base/ui_config.json` | Contrato completo del dashboard | JSON |
+| `agentui_mcp/server.py` | Servidor MCP expuesto al agente de IA | FastMCP |
+| `agentui_mcp/tools/` | Implementaciones de herramientas por categoría | Python |
 
-## Separation of Responsibilities
+## Separación de Responsabilidades
 
-- **The MCP writes** `ui_config.json`.
-- **The UI reads** `ui_config.json` and knows nothing about business logic.
-- **`core/tools.py`** translates config to queries and validates JSON.
-- **`core/data.py`** only executes SQL; never guesses columns or types.
-- **`core/inference.py`** concentrates synonyms and detection heuristics.
+- **El MCP escribe** `ui_config.json`.
+- **La UI lee** `ui_config.json` y no sabe nada de lógica de negocio.
+- **`core/tools.py`** traduce el config a consultas y valida el JSON.
+- **`core/data.py`** solo ejecuta SQL; nunca adivina columnas ni tipos.
+- **`core/inference.py`** concentra sinónimos y heurísticas de detección.
 
-The advantage is direct: the same system serves sales, inventory, logistics, or any other domain by changing only the input data.
+La ventaja es directa: el mismo sistema sirve ventas, inventario, logística o cualquier otro dominio cambiando solo los datos de entrada.
 
-## Repository Structure
+## Estructura del Repositorio
 
 ```
 .
-├── pyproject.toml              # Project root (uv sync / uv run ui)
-├── .streamlit/config.toml      # Light theme
-├── Dockerfile                  # Docker image
-├── docker-compose.yml          # UI and MCP services
+├── pyproject.toml              # Raíz del proyecto (uv sync / uv run ui)
+├── .streamlit/config.toml      # Tema claro
+├── Dockerfile                  # Imagen Docker
+├── docker-compose.yml          # Servicios UI y MCP
 ├── app_base/
-│   ├── .streamlit/config.toml  # Light theme (app)
+│   ├── .streamlit/config.toml  # Tema claro (app)
 │   ├── core/                   # data.py · tools.py · inference.py · chart_builder.py
 │   ├── streamlit_ui/           # main.py · views/ · styles/
-│   └── ui_config.json          # Dashboard contract
+│   └── ui_config.json          # Contrato del dashboard
 ├── agentui_mcp/
-│   ├── server.py               # MCP server (entry point)
-│   ├── instructions.py         # Agent instructions
-│   ├── utils.py                # Shared helpers
-│   └── tools/                  # Tools by category
+│   ├── server.py               # Servidor MCP (punto de entrada)
+│   ├── instructions.py         # Instrucciones del agente
+│   ├── utils.py                # Helpers compartidos
+│   └── tools/                  # Herramientas por categoría
 ├── docs/
-│   ├── TOOLS.md                # MCP tools reference
-│   ├── INSTALL.md              # Installation guide
-│   └── ARCHITECTURE.md         # This file
-├── build_mcp/                  # Pre-built wheel and build scripts
-└── tests/
-    ├── test_inference.py       # Inference and SQL security tests
-    ├── test_mcp_tools.py       # MCP tool tests
-    └── fixtures/               # Test data
+│   ├── TOOLS.md                # Referencia de herramientas MCP
+│   ├── INSTALL.md              # Guía de instalación
+│   └── ARCHITECTURE.md         # Este archivo
+├── examples/                   # Datos de ejemplo para pruebas
+└── build_mcp/                  # Wheel pre-construido y scripts de build
 ```
 
-## Security
+## Seguridad
 
-- **Read-only queries** — the UI opens DuckDB in `read_only` mode.
-- **SQL allow-list** — `safe_sql()` uses `sqlglot` to parse the AST and block write operations, file access, or network access.
-- **Cross-validation** — `cross_validate_config()` verifies KPI totals match chart sums, detects nulls, and checks column references.
-- **Atomic JSON write** — the MCP writes to a temp file and replaces with `os.replace`; the UI never reads a half-written JSON.
-- **Last valid config** — if the JSON is momentarily unreadable, the last good config is kept in session state.
-- **Ephemeral connections** — connections are opened and closed per query to avoid file locking between MCP and Streamlit on Windows.
+- **Consultas de solo lectura** — la UI abre DuckDB en modo `read_only`.
+- **Allow-list de SQL** — `safe_sql()` usa `sqlglot` para parsear el AST y bloquear operaciones de escritura, acceso a archivos o red.
+- **Validación cruzada** — `cross_validate_config()` verifica que los totales de KPIs coincidan con las sumas de gráficos, detecta nulos y comprueba referencias de columnas.
+- **Escritura atómica del JSON** — el MCP escribe en un archivo temporal y reemplaza con `os.replace`; la UI nunca lee un JSON a medio escribir.
+- **Último config válido** — si el JSON es momentáneamente ilegible, el último config bueno se mantiene en el estado de sesión.
+- **Conexiones efímeras** — las conexiones se abren y cierran por consulta para evitar bloqueo de archivos entre MCP y Streamlit en Windows.

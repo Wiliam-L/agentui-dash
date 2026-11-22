@@ -1,10 +1,10 @@
-# Installation Guide
+# Guía de Instalación
 
-## Prerequisites
+## Requisitos previos
 
-**uv** — a fast Python package installer. `uv` automatically downloads and installs Python 3.11+ if you don't have it.
+**uv** — un instalador de paquetes Python rápido. `uv` descarga e instala automáticamente Python 3.11+ si no lo tienes.
 
-### Install uv
+### Instalar uv
 
 **Windows (PowerShell):**
 ```powershell
@@ -18,26 +18,26 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ---
 
-## Option A: Pre-built Package (Recommended)
+## Opción A: Paquete pre-construido (Recomendada)
 
-Download the `.whl` file from `build_mcp/` and install it globally:
+Descarga el archivo `.whl` desde `build_mcp/` e instálalo globalmente:
 
 ```powershell
 uv tool install agentui_dash-0.1.0-py3-none-any.whl
 ```
 
-After installation, two commands are available globally:
+Después de la instalación, dos comandos están disponibles globalmente:
 
-| Command | Description |
+| Comando | Descripción |
 |---|---|
-| `ui` | Start the Streamlit dashboard |
-| `agentui-mcp` | Start the MCP server for AI agents |
+| `ui` | Iniciar el dashboard Streamlit |
+| `agentui-mcp` | Iniciar el servidor MCP para agentes de IA |
 
 ---
 
-## Option B: From Source Code
+## Opción B: Desde el código fuente
 
-Clone the repository and install from the root directory:
+Clona el repositorio e instala desde el directorio raíz:
 
 ```powershell
 git clone https://github.com/Wiliam-L/agentui-dash.git
@@ -45,31 +45,31 @@ cd agentui-dash
 uv sync
 ```
 
-Run with:
+Ejecutar con:
 ```powershell
-uv run ui          # Start dashboard
-uv run agentui-mcp # Start MCP server
+uv run ui          # Iniciar dashboard
+uv run agentui-mcp # Iniciar servidor MCP
 ```
 
 ---
 
-## Option C: Docker
+## Opción C: Docker
 
-For a fully isolated environment without installing Python or `uv`:
+Para un entorno completamente aislado sin instalar Python ni `uv`:
 
 ```powershell
 docker compose up --build
 ```
 
-The dashboard will be available at `http://localhost:8501`.
+El dashboard estará disponible en `http://localhost:8501`.
 
 ---
 
-## Connecting an AI Agent
+## Conectar un Agente de IA
 
 ### Opencode
 
-If you installed with `uv tool install`:
+Si instalaste con `uv tool install`:
 
 ```powershell
 opencode mcp add agentui-dash --global -- agentui-mcp
@@ -78,7 +78,7 @@ opencode mcp list
 
 ### Claude Desktop
 
-Edit `~/.claude/claude_desktop_config.json`:
+Edita `~/.claude/claude_desktop_config.json`:
 
 ```json
 {
@@ -94,31 +94,31 @@ Edit `~/.claude/claude_desktop_config.json`:
 
 ### Cursor
 
-`Ctrl+Shift+P` → *Cursor: Manage MCP Servers* → Add `agentui-mcp`.
+`Ctrl+Shift+P` → *Cursor: Manage MCP Servers* → Agregar `agentui-mcp`.
 
 ### Windsurf
 
-*Settings* → *MCP Servers* → Add `agentui-mcp`.
+*Settings* → *MCP Servers* → Agregar `agentui-mcp`.
 
-### Docker (MCP Server)
+### Docker (Servidor MCP)
 
-**Option 1: docker compose (recommended)**
+**Opción 1: docker compose (recomendada)**
 ```powershell
 docker compose run --rm mcp
 ```
 
-**Option 2: docker run**
+**Opción 2: docker run**
 ```powershell
 docker run -i --rm agentui-dash python -m agentui_mcp.server
 ```
 
 ---
 
-## Troubleshooting
+## Solución de problemas
 
-### WinError 64 on Windows + Python 3.14
+### WinError 64 en Windows + Python 3.14
 
-Streamlit's default IPv6 bind may fail intermittently. To fix, bind to IPv4:
+El enlace IPv6 por defecto de Streamlit puede fallar intermitentemente. Para solucionarlo, enlaza a IPv4:
 
 ```powershell
 $env:AGENTUI_HOST = "0.0.0.0"
@@ -126,9 +126,9 @@ $env:AGENTUI_PORT = "8501"
 uv run ui
 ```
 
-### MCP Server Not Found
+### Servidor MCP No Encontrado
 
-If `agentui-mcp` is not in your PATH after `uv tool install`, use:
+Si `agentui-mcp` no está en tu PATH después de `uv tool install`, usa:
 
 ```powershell
 opencode mcp add agentui-dash --global -- python -m agentui_mcp

@@ -89,11 +89,11 @@ app_base/manifest.json
 app_base/*.duckdb
 
 # Large data files (sample data for testing, not source code)
-# Allow test fixtures to be tracked
+# Allow examples to be tracked
 *.csv
-!tests/fixtures/*.csv
+!examples/*.csv
 *.xlsx
-!tests/fixtures/*.xlsx
+!examples/*.xlsx
 
 # Config backups created by tools.py
 *.json.bak

@@ -1,83 +1,83 @@
-# MCP Tools Reference
+# Herramientas MCP
 
-AgentUI Dash exposes **29 public MCP tools** accessible by any AI agent. All SQL is validated via `safe_sql()` (sqlglot), the JSON structure via `validate_config()`, and calculation consistency via `cross_validate_config()`.
+AgentUI Dash expone **29 herramientas MCP públicas** accesibles por cualquier agente de IA. Todo SQL se valida con `safe_sql()` (sqlglot), la estructura JSON con `validate_config()`, y la consistencia de cálculos con `cross_validate_config()`.
 
 ## Dashboard
 
-| Tool | Description |
+| Herramienta | Descripción |
 |---|---|
-| `create_dashboard` | One-step dashboard creation: ingest → detect → generate config → start UI |
+| `create_dashboard` | Creación integral: ingesta → detección → generación de config → inicio de UI |
 
-## Data
+## Datos
 
-| Tool | Description |
+| Herramienta | Descripción |
 |---|---|
-| `upload_csv` | Upload a single CSV/Excel file; creates a unique table per file |
-| `upload_multiple_csvs` | Upload multiple files; each gets its own table |
-| `update_data` | Update an existing table with column validation |
-| `analyze_relationships` | Detect relationships between loaded tables (same schema, common columns, unrelated) |
-| `preview_table` | Preview first 10 rows of a table |
-| `list_tables` | List all available tables |
-| `get_table_columns` | Get column names and types of a table |
-| `explore_data` | Explore data statistics (counts, nulls, types) |
-| `clear_data` | Clear all data and config |
+| `upload_csv` | Cargar un archivo CSV/Excel; crea una tabla única por archivo |
+| `upload_multiple_csvs` | Cargar múltiples archivos; cada uno obtiene su propia tabla |
+| `update_data` | Actualizar una tabla existente con validación de columnas |
+| `analyze_relationships` | Detectar relaciones entre tablas cargadas (mismo esquema, columnas comunes, sin relación) |
+| `preview_table` | Previsualizar las primeras 10 filas de una tabla |
+| `list_tables` | Listar todas las tablas disponibles |
+| `get_table_columns` | Obtener nombres y tipos de columna de una tabla |
+| `explore_data` | Explorar estadísticas de datos (conteos, nulos, tipos) |
+| `clear_data` | Limpiar todos los datos y la configuración |
 
-## Configuration
+## Configuración
 
-| Tool | Description |
+| Herramienta | Descripción |
 |---|---|
-| `generate_config` | Auto-generate `ui_config.json` from loaded tables |
-| `get_config` | Read the current `ui_config.json` |
-| `load_config` | Load config from file |
-| `update_config` | Update specific fields in `ui_config.json` |
-| `validate_config` | Validate config structure and execute SQL queries |
-| `cross_validate_config` | Cross-validate KPI totals match chart sums, detect nulls, check column references |
+| `generate_config` | Generar automáticamente `ui_config.json` desde las tablas cargadas |
+| `get_config` | Leer el `ui_config.json` actual |
+| `load_config` | Cargar configuración desde archivo |
+| `update_config` | Actualizar campos específicos en `ui_config.json` |
+| `validate_config` | Validar estructura del config y ejecutar consultas SQL |
+| `cross_validate_config` | Validar cruzado: totales de KPIs coinciden con sumas de gráficos, detectar nulos, verificar referencias de columnas |
 
-## Queries
+## Consultas
 
-| Tool | Description |
+| Herramienta | Descripción |
 |---|---|
-| `run_query` | Execute a read-only SQL query |
-| `run_query_with_filters` | Execute SQL with global filters injected |
-| `get_kpi` | Execute a single KPI query |
+| `run_query` | Ejecutar una consulta SQL de solo lectura |
+| `run_query_with_filters` | Ejecutar SQL con filtros globales inyectados |
+| `get_kpi` | Ejecutar una consulta KPI individual |
 
-## Filters
+## Filtros
 
-| Tool | Description |
+| Herramienta | Descripción |
 |---|---|
-| `get_filter_options` | Get distinct values for a filter column |
-| `get_date_range` | Get min/max dates for a date column |
+| `get_filter_options` | Obtener valores distintos para una columna de filtro |
+| `get_date_range` | Obtener fechas mínimas/máximas para una columna de fecha |
 
-## Detection
+## Detección
 
-| Tool | Description |
+| Herramienta | Descripción |
 |---|---|
-| `detect_columns` | Detect column roles (branch, date, category, amount, etc.) |
-| `get_available_roles` | List all available column roles |
+| `detect_columns` | Detectar roles de columna (sucursal, fecha, categoría, monto, etc.) |
+| `get_available_roles` | Listar todos los roles de columna disponibles |
 
-## Chart Builder
+## Constructor de Gráficos
 
-| Tool | Description |
+| Herramienta | Descripción |
 |---|---|
-| `list_chart_types` | List available chart types (bar, pie, line, scatter, heatmap, etc.) |
-| `recommend_chart` | Recommend chart type based on SQL query |
-| `build_chart_config` | Build chart configuration JSON |
-| `build_kpi_config` | Build KPI configuration JSON |
-| `build_filter_config` | Build filter configuration JSON |
-| `build_module_config` | Build complete module configuration JSON |
+| `list_chart_types` | Listar tipos de gráficos disponibles (barra, pastel, línea, dispersión, mapa de calor, etc.) |
+| `recommend_chart` | Recomendar tipo de gráfico basado en una consulta SQL |
+| `build_chart_config` | Construir configuración JSON de un gráfico |
+| `build_kpi_config` | Construir configuración JSON de un KPI |
+| `build_filter_config` | Construir configuración JSON de un filtro |
+| `build_module_config` | Construir configuración JSON completa de un módulo |
 
-## Server
+## Servidor
 
-| Tool | Description |
+| Herramienta | Descripción |
 |---|---|
-| `start_streamlit` | Start the Streamlit dashboard server |
-| `stop_streamlit` | Stop the Streamlit server |
-| `check_streamlit_status` | Check if Streamlit is running |
+| `start_streamlit` | Iniciar el servidor del dashboard Streamlit |
+| `stop_streamlit` | Detener el servidor Streamlit |
+| `check_streamlit_status` | Verificar si Streamlit está en ejecución |
 
-## Supported Chart Types
+## Tipos de Gráficos Soportados
 
 `bar`, `bar_h`, `bar_grouped`, `bar_stacked`, `line`, `pie`, `scatter`, `heatmap`
 
-## KPI Formats
+## Formatos de KPI
 
 `money`, `int`, `percent`, `str`

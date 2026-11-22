@@ -31,6 +31,3 @@ packages = ["app_base", "agentui_mcp"]
 dev = [
     "pytest>=9.2.0",
 ]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
