@@ -49,11 +49,14 @@ La ventaja es directa: el mismo sistema sirve ventas, inventario, logística o c
 ├── Dockerfile                  # Imagen Docker
 ├── docker-compose.yml          # Servicios UI y MCP
 ├── app_base/
+│   ├── __init__.py             # Paquete Python
 │   ├── .streamlit/config.toml  # Tema claro (app)
 │   ├── core/                   # data.py · tools.py · inference.py · chart_builder.py
 │   ├── streamlit_ui/           # main.py · views/ · styles/
 │   └── ui_config.json          # Contrato del dashboard
 ├── agentui_mcp/
+│   ├── __init__.py             # Paquete Python
+│   ├── __main__.py             # Permite `python -m agentui_mcp`
 │   ├── server.py               # Servidor MCP (punto de entrada)
 │   ├── instructions.py         # Instrucciones del agente
 │   ├── utils.py                # Helpers compartidos

@@ -1,6 +1,6 @@
 # Herramientas MCP
 
-AgentUI Dash expone **30 herramientas MCP públicas** accesibles por cualquier agente de IA. Todo SQL se valida con `safe_sql()` (sqlglot), la estructura JSON con `validate_config()`, y la consistencia de cálculos con `cross_validate_config()`.
+AgentUI Dash expone **31 herramientas MCP públicas** accesibles por cualquier agente de IA. Todo SQL se valida con `safe_sql()` (sqlglot), la estructura JSON con `validate_config()`, y la consistencia de cálculos con `cross_validate_config()`.
 
 ## Dashboard
 
@@ -52,6 +52,12 @@ AgentUI Dash expone **30 herramientas MCP públicas** accesibles por cualquier a
 |---|---|
 | `detect_columns` | Detectar roles de columna (sucursal, fecha, categoría, monto, etc.) |
 | `get_available_roles` | Listar todos los roles de columna disponibles |
+
+## Audit
+
+| Herramienta | Descripción |
+|---|---|
+| `audit_dashboard` | Auditoría integral: verifica SQL, iconos emoji, consistencia de KPIs vs gráficos, referencias de tablas, calidad de filtros y seguridad de consultas |
 
 ## Constructor de Gráficos
 
