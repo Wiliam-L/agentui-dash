@@ -16,20 +16,37 @@ Para **freelancers y agencias** que crean dashboards para clientes.
 
 ## Quickstart
 
+**Paso 1 — Instalar uv** (descarga Python automáticamente)
+
+**Windows:**
 ```powershell
-# 1. Instalar uv (descarga Python automáticamente)
 powershell -ExecutionPolicy Bypass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
 
-# 2. Instalar el paquete
-uv tool install agentui_dash-0.1.0-py3-none-any.whl
+**macOS / Linux:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-# 3. Conectar con Opencode
+**Paso 2 — Instalar el paquete**
+
+Descarga el archivo `.whl` desde [build_mcp/](build_mcp/) e instálalo:
+
+```powershell
+uv tool install build_mcp/agentui_dash-0.1.0-py3-none-any.whl
+```
+
+**Paso 3 — Conectar con Opencode**
+
+```powershell
 opencode mcp add agentui-dash --global -- agentui-mcp
 ```
 
-Luego, dile al agente:
+**Paso 4 — Probar con datos de ejemplo**
 
-> «Tengo `ventas.csv`, créame un dashboard.»
+Un CSV de ejemplo ya viene incluido en [`examples/ventas.csv`](examples/ventas.csv). Dile al agente:
+
+> «Tengo `examples/ventas.csv`, créame un dashboard.»
 
 El agente llamará `create_dashboard()` y devolverá la URL del resultado.
 
@@ -59,6 +76,7 @@ Usuario  →  Agente IA  →  MCP Server  →  ui_config.json  →  Streamlit UI
 - **Actualización de datos** — el dashboard incluye un file uploader para que el cliente actualice los datos sin depender del agente.
 - **Docker** — entrega el dashboard como contenedor aislado: `docker compose up --build`.
 - **Recarga en caliente** — el agente puede modificar KPIs o gráficos en tiempo real sin reiniciar Streamlit.
+- **JSON independiente del frontend** — el contrato `ui_config.json` no depende de Streamlit. Hoy se renderiza con Streamlit, mañana con React o cualquier otro framework.
 
 ## Herramientas MCP
 
@@ -87,3 +105,7 @@ Para todas las opciones de instalación (código fuente, Docker, otros clientes 
 2. Exportación a PDF.
 3. Fuentes de datos externas (PostgreSQL, MySQL).
 4. Personalización avanzada de temas y layouts.
+
+## Licencia
+
+[MIT](LICENSE) — libre para evaluación y demo.
