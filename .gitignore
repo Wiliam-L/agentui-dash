@@ -65,6 +65,7 @@ compact-persist.log
 # Screenshots and images
 screenshots/
 *.png
+!port.png
 *.jpg
 *.jpeg
 *.gif
