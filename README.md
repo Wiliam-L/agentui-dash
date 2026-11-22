@@ -101,6 +101,7 @@ Usuario  →  Agente IA  →  MCP Server  →  ui_config.json  →  Streamlit UI
 ## Personalización y entrega al cliente
 
 - **White-label** — cambia `brand_name`, `brand_sub`, `brand_icon` y `footer` en el config para personalizar la marca.
+- **Exportación a PDF** — botón en el sidebar para descargar un reporte PDF con portada, KPIs, gráficos y tablas. El LLM también puede generar el PDF vía la herramienta `export_pdf`.
 - **Actualización de datos** — el dashboard incluye un file uploader para que el cliente actualice los datos sin depender del agente.
 - **Docker** — entrega el dashboard como contenedor aislado: `docker compose up --build`.
 - **Recarga en caliente** — el agente puede modificar KPIs o gráficos en tiempo real sin reiniciar Streamlit.
@@ -108,7 +109,7 @@ Usuario  →  Agente IA  →  MCP Server  →  ui_config.json  →  Streamlit UI
 
 ## Herramientas MCP
 
-El agente tiene acceso a **30 herramientas públicas** organizadas en categorías: dashboard, datos, configuración, consultas, filtros, detección, gráficos y servidor.
+El agente tiene acceso a **32 herramientas públicas** organizadas en categorías: dashboard, datos, configuración, consultas, filtros, detección, gráficos, exportación y servidor.
 
 [Lista completa de herramientas →](docs/TOOLS.md)
 
@@ -130,10 +131,9 @@ Para todas las opciones de instalación (código fuente, Docker, otros clientes 
 ## Roadmap
 
 1. Workspaces múltiples (aislar dashboards por proyecto).
-2. Exportación a PDF.
-3. Fuentes de datos externas (PostgreSQL, MySQL).
-4. Personalización avanzada de temas y layouts.
-5. **Autenticación y acceso seguro** — integrar un reverse proxy (Cloudflare Access o Auth0) para proteger dashboards con login sin modificar código de la app. Cubierto gratis hasta 100 usuarios activos (Cloudflare) o 7,500 (Auth0).
+2. Fuentes de datos externas (PostgreSQL, MySQL).
+3. Personalización avanzada de temas y layouts.
+4. **Autenticación y acceso seguro** — integrar un reverse proxy (Cloudflare Access o Auth0) para proteger dashboards con login sin modificar código de la app.
 
 ## Licencia
 

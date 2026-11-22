@@ -26,6 +26,7 @@ Usuario  →  Agente IA  →  MCP Server  →  ui_config.json  →  Streamlit UI
 | `app_base/core/tools.py` | Puente JSON ↔ DuckDB: valida, guarda, ejecuta | Python |
 | `app_base/core/inference.py` | Inteligencia: mapea columnas físicas a roles lógicos | Python |
 | `app_base/core/chart_builder.py` | Construcción de gráficos y estilo Plotly | Plotly |
+| `app_base/core/pdf_export.py` | Generación de PDFs white-label (HTML → WeasyPrint) | WeasyPrint, Kaleido |
 | `app_base/ui_config.json` | Contrato completo del dashboard | JSON |
 | `agentui_mcp/server.py` | Servidor MCP expuesto al agente de IA | FastMCP |
 | `agentui_mcp/tools/` | Implementaciones de herramientas por categoría | Python |
@@ -51,7 +52,7 @@ La ventaja es directa: el mismo sistema sirve ventas, inventario, logística o c
 ├── app_base/
 │   ├── __init__.py             # Paquete Python
 │   ├── .streamlit/config.toml  # Tema claro (app)
-│   ├── core/                   # data.py · tools.py · inference.py · chart_builder.py
+│   ├── core/                   # data.py · tools.py · inference.py · chart_builder.py · pdf_export.py
 │   ├── streamlit_ui/           # main.py · views/ · styles/
 │   └── ui_config.json          # Contrato del dashboard
 ├── agentui_mcp/

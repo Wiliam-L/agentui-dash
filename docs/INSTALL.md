@@ -159,3 +159,11 @@ Si `uv run agentui-mcp` no funciona, usa el módulo directamente en la configura
   }
 }
 ```
+
+### Exportación a PDF no disponible
+
+La exportación a PDF requiere `weasyprint`, que depende de bibliotecas del sistema (`pango`, `gdk-pixbuf`). Si ves un error de `ImportError` al exportar:
+
+- **Con `uv sync`**: la dependencia se instala automáticamente con `uv sync`.
+- **Docker**: las bibliotecas del sistema ya están incluidas en el `Dockerfile`.
+- **Windows manual**: instala `weasyprint` con `pip install weasyprint`. Si falla, usa la imagen Docker.

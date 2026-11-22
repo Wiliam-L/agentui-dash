@@ -7,6 +7,7 @@ The future MCP server will write this JSON; the UI just renders it.
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -110,10 +111,30 @@ def _brand(config: dict) -> None:
     brand_name = config.get("brand_name", "Dashboard")
     brand_sub = config.get("brand_sub", "")
     brand_icon = config.get("brand_icon", "storefront")
+    brand_logo = config.get("brand_logo", "")
+
+    # Build the logo area: image (URL or local file) falls back to Material Icon
+    if brand_logo:
+        if brand_logo.startswith(("http://", "https://")):
+            logo_html = f'<img class="brand-logo-img" src="{brand_logo}" alt="{brand_name}" />'
+        else:
+            # Local file in app_base/assets/
+            logo_path = BASE_DIR / "assets" / brand_logo
+            if logo_path.is_file():
+                import base64
+                mime = "image/png" if brand_logo.endswith(".png") else "image/jpeg"
+                b64 = base64.b64encode(logo_path.read_bytes()).decode("ascii")
+                logo_html = f'<img class="brand-logo-img" src="data:{mime};base64,{b64}" alt="{brand_name}" />'
+            else:
+                # File not found — fall back to icon
+                logo_html = f'<span class="brand-ic"><span class="mi">{brand_icon}</span></span>'
+    else:
+        logo_html = f'<span class="brand-ic"><span class="mi">{brand_icon}</span></span>'
+
     st.markdown(
         f"""
         <div class="brand">
-            <span class="brand-ic"><span class="mi">{brand_icon}</span></span>
+            {logo_html}
             <div>
                 <div class="brand-name">{brand_name}</div>
                 <div class="brand-sub">{brand_sub}</div>
@@ -328,6 +349,44 @@ def _global_filters(config: dict) -> dict:
     return values
 
 
+def _pdf_export_button(config: dict, filter_values: dict) -> None:
+    """PDF export button in the sidebar.
+
+    Generates the PDF lazily only when the user clicks the button, not on
+    every rerun.  The download is offered via ``st.download_button`` so the
+    browser handles the file save.
+    """
+    if not has_data():
+        return
+
+    st.markdown('<div class="side-label">Export</div>', unsafe_allow_html=True)
+
+    if st.button("📄 Exportar a PDF", use_container_width=True):
+        try:
+            from core.pdf_export import generate_pdf
+        except ImportError as exc:
+            st.error(f"PDF export requires weasyprint: {exc}")
+            return
+
+        with st.spinner("Generando PDF..."):
+            pdf_bytes = generate_pdf(config, filter_values)
+
+        # Build a clean file name from brand_name
+        brand = config.get("brand_name", "Dashboard")
+        safe_name = re.sub(r"[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s]", "", brand).strip().replace(" ", "_")
+        file_name = f"{safe_name}.pdf"
+
+        st.download_button(
+            label="⬇️ Descargar PDF",
+            data=pdf_bytes,
+            file_name=file_name,
+            mime="application/pdf",
+            use_container_width=True,
+        )
+
+    st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
+
+
 # --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
@@ -342,13 +401,15 @@ def main():
         initial_sidebar_state="expanded",
     )
     _watch_config()
-    styles.apply_styles()
+    primary_color = config.get("primary_color")
+    styles.apply_styles(primary_color=primary_color)
 
     with st.sidebar:
         _brand(config)
         modulo_id = _navigation(config)
         _data_source(config)
         filter_values = _global_filters(config)
+        _pdf_export_button(config, filter_values)
         st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
         # Dynamic sidebar disclaimer from config
         disclaimer = config.get("sidebar_disclaimer", "")

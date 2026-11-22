@@ -8,9 +8,9 @@ RUN uv venv && uv pip install .
 # ── Stage 2: Runtime ───────────────────────────────────────────
 FROM python:3.11-slim
 
-# System deps for kaleido (webkit)
+# System deps for kaleido (webkit) and weasyprint (pango)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libglib2.0-0 libwebkit2gtk-4.1 && \
+    apt-get install -y --no-install-recommends libglib2.0-0 libwebkit2gtk-4.1 libpango-1.0-0 libgdk-pixbuf2.0-0 && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the virtual env from the builder

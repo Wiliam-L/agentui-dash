@@ -18,13 +18,44 @@ def chart_colors() -> dict:
     }
 
 
-def apply_styles() -> None:
+def apply_styles(primary_color: str | None = None) -> None:
+    """Apply base CSS and optionally override the primary color.
+
+    Args:
+        primary_color: Hex color (e.g. "#e3000b") to use as the dashboard
+            primary color. When provided, CSS custom properties are overridden
+            so buttons, links, accents, and focus states all match.
+    """
     # Inject Material Icons CDN link tag in the document head
     st.markdown(MATERIAL_ICONS_LINK, unsafe_allow_html=True)
     # Inject CSS rules — st.markdown with unsafe_allow_html=True injects
     # raw CSS rules into the page <head> in Streamlit when wrapped in <style>.
     # The key is to NOT include any text content outside the <style> tag.
-    st.markdown(f"<style>{_css_body()}</style>", unsafe_allow_html=True)
+    css = _css_body()
+    if primary_color:
+        css += _primary_color_override(primary_color)
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+
+def _primary_color_override(hex_color: str) -> str:
+    """Generate CSS that overrides --primary and derived variables.
+
+    Derives a light tint (10% opacity) for chip backgrounds and focus states.
+    """
+    safe = hex_color.lstrip("#")
+    if len(safe) == 3:
+        safe = safe[0]*2 + safe[1]*2 + safe[2]*2
+    tint = f"{hex_color}1a"  # ~10% opacity hex
+    return f"""
+:root {{
+    --primary: {hex_color} !important;
+    --chip-bg: {tint};
+    --side-focus-bg: {tint};
+    --side-focus-border: {hex_color};
+}}
+a, .stButton > button {{ color: {hex_color} !important; }}
+.stButton > button:hover {{ background-color: {tint} !important; }}
+"""
 
 
 PALETTE = [
@@ -175,6 +206,10 @@ section[data-testid="stSidebar"] .stMarkdown p { margin-bottom: 0; }
     display: inline-flex; align-items: center; justify-content: center;
     background: linear-gradient(135deg,#2563eb,#38bdf8); color: #fff; font-size: 22px;
     box-shadow: 0 4px 10px rgba(37,99,235,.25);
+}
+.brand-logo-img {
+    width: 38px; height: 38px; border-radius: 10px; flex: 0 0 auto;
+    object-fit: contain;
 }
 .brand-name { font-size: 1rem; font-weight: 800; color: var(--side-strong); letter-spacing: -.01em; }
 .brand-sub { font-size: .8rem; color: var(--side-muted); }

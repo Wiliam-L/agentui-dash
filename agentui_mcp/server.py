@@ -34,6 +34,7 @@ from agentui_mcp.tools.validation import register_validation_tools
 from agentui_mcp.tools.preview import register_preview_tools
 from agentui_mcp.tools.chart_builder import register_chart_builder_tools
 from agentui_mcp.tools.audit import register_audit_tools
+from agentui_mcp.tools.pdf import register_pdf_tools
 
 
 mcp = FastMCP(
@@ -52,6 +53,7 @@ register_validation_tools(mcp)
 register_preview_tools(mcp)
 register_chart_builder_tools(mcp)
 register_audit_tools(mcp)
+register_pdf_tools(mcp)
 
 def main():
     """Entry point for the agentui-mcp command."""

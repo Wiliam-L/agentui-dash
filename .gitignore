@@ -95,6 +95,16 @@ app_base/*.duckdb
 # Generated UI config (created by MCP at runtime)
 app_base/ui_config.json
 
+# Generated PDF exports
+app_base/export/
+
+# Client logo assets (uploaded at runtime by the MCP agent)
+app_base/assets/*.png
+app_base/assets/*.jpg
+app_base/assets/*.jpeg
+app_base/assets/*.svg
+!app_base/assets/.gitkeep
+
 # Large data files (sample data for testing, not source code)
 # Allow examples to be tracked
 *.csv

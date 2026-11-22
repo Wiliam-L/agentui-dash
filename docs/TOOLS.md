@@ -1,6 +1,6 @@
 # Herramientas MCP
 
-AgentUI Dash expone **31 herramientas MCP públicas** accesibles por cualquier agente de IA. Todo SQL se valida con `safe_sql()` (sqlglot), la estructura JSON con `validate_config()`, y la consistencia de cálculos con `cross_validate_config()`.
+AgentUI Dash expone **32 herramientas MCP públicas** accesibles por cualquier agente de IA. Todo SQL se valida con `safe_sql()` (sqlglot), la estructura JSON con `validate_config()`, y la consistencia de cálculos con `cross_validate_config()`.
 
 ## Dashboard
 
@@ -77,6 +77,12 @@ AgentUI Dash expone **31 herramientas MCP públicas** accesibles por cualquier a
 | `start_streamlit` | Iniciar el servidor del dashboard Streamlit |
 | `stop_streamlit` | Detener el servidor Streamlit |
 | `check_streamlit_status` | Verificar si Streamlit está en ejecución |
+
+## Exportación
+
+| Herramienta | Descripción |
+|---|---|
+| `export_pdf` | Generar un PDF white-label del dashboard completo con portada, KPIs, gráficos y tablas |
 
 ## Tipos de Gráficos Soportados
 
