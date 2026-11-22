@@ -8,10 +8,12 @@ No hardcoded column names, no hardcoded queries — everything comes from the co
 """
 from __future__ import annotations
 
+import datetime
 import hashlib
 import json
 import logging
 import os
+import shutil
 import time
 from pathlib import Path
 from typing import Any
@@ -20,7 +22,7 @@ import pandas as pd
 import sqlglot
 from sqlglot import exp
 
-from .data import ejecutar
+from .data import run_query
 
 _logger = logging.getLogger("tools")
 
@@ -62,61 +64,61 @@ _CONFIG_PATH = Path(__file__).resolve().parent.parent / "ui_config.json"
 # Filter handling
 # --------------------------------------------------------------------------- #
 
-def _build_where(filtros_config: list[dict], filtros_valores: dict) -> tuple[str, dict[str, Any]]:
+def _build_where(filter_cfg: list[dict], filter_vals: dict) -> tuple[str, dict[str, Any]]:
     """Build a SQL WHERE clause from filter config and user-selected values.
     
     Args:
-        filtros_config: List of filter definitions from JSON:
+        filter_cfg: List of filter definitions from JSON:
             [{"nombre": "branch", "columna": "branch", "tabla": "sales", "tipo": "select"}, ...]
-        filtros_valores: Dict of user-selected values:
+        filter_vals: Dict of user-selected values:
             {"branch": "A", "date_range": (date1, date2), ...}
     
     Returns:
         (where_clause, params) tuple for parameterized SQL.
     """
-    clausulas: list[str] = []
+    clauses: list[str] = []
     params: dict[str, Any] = {}
     
-    for f_config in filtros_config:
-        filtro_nombre = f_config["nombre"]
-        columna = f_config["columna"]
-        filtro_tipo = f_config.get("tipo", "select")
+    for f_config in filter_cfg:
+        filter_name = f_config["nombre"]
+        column = f_config["columna"]
+        filter_type = f_config.get("tipo", "select")
         
-        valor = filtros_valores.get(filtro_nombre)
-        if valor is None:
+        value = filter_vals.get(filter_name)
+        if value is None:
             continue
         
-        if filtro_tipo == "select":
+        if filter_type == "select":
             # Single select — "All" means no filter
-            if valor and valor != "All":
-                key = f"f_{filtro_nombre}"
-                clausulas.append(f'"{columna}" = ${key}')
-                params[key] = valor
+            if value and value != "All":
+                key = f"f_{filter_name}"
+                clauses.append(f'"{column}" = ${key}')
+                params[key] = value
         
-        elif filtro_tipo == "date_range":
+        elif filter_type == "date_range":
             # Date range slider — value is a tuple (min, max)
             # OR fallback select — value is a single value or None
-            if isinstance(valor, (list, tuple)) and len(valor) == 2 and valor[0] is not None and valor[1] is not None:
-                key_min = f"f_{filtro_nombre}_min"
-                key_max = f"f_{filtro_nombre}_max"
-                clausulas.append(f'"{columna}" BETWEEN ${key_min} AND ${key_max}')
-                params[key_min] = pd.Timestamp(valor[0])
-                params[key_max] = pd.Timestamp(valor[1])
-            elif valor is not None and valor != "All":
+            if isinstance(value, (list, tuple)) and len(value) == 2 and value[0] is not None and value[1] is not None:
+                key_min = f"f_{filter_name}_min"
+                key_max = f"f_{filter_name}_max"
+                clauses.append(f'"{column}" BETWEEN ${key_min} AND ${key_max}')
+                params[key_min] = pd.Timestamp(value[0])
+                params[key_max] = pd.Timestamp(value[1])
+            elif value is not None and value != "All":
                 # Fallback: single value from select
-                key = f"f_{filtro_nombre}"
-                clausulas.append(f'"{columna}" = ${key}')
-                params[key] = valor
+                key = f"f_{filter_name}"
+                clauses.append(f'"{column}" = ${key}')
+                params[key] = value
         
-        elif filtro_tipo == "multiselect":
+        elif filter_type == "multiselect":
             # Multi-select
-            if valor and len(valor) > 0:
-                placeholders = ", ".join(f"$f_{filtro_nombre}_{i}" for i in range(len(valor)))
-                for i, v in enumerate(valor):
-                    params[f"f_{filtro_nombre}_{i}"] = v
-                clausulas.append(f'"{columna}" IN ({placeholders})')
+            if value and len(value) > 0:
+                placeholders = ", ".join(f"$f_{filter_name}_{i}" for i in range(len(value)))
+                for i, v in enumerate(value):
+                    params[f"f_{filter_name}_{i}"] = v
+                clauses.append(f'"{column}" IN ({placeholders})')
     
-    where = " WHERE " + " AND ".join(clausulas) if clausulas else ""
+    where = " WHERE " + " AND ".join(clauses) if clauses else ""
     return where, params
 
 
@@ -295,10 +297,10 @@ def _inject_filters_with_sqlglot(sql: str, conditions_str: str) -> str:
         return sql
 
 
-def ejecutar_query(
+def execute_query(
     query_config: dict,
-    filtros_config: list[dict] | None = None,
-    filtros_valores: dict | None = None,
+    filter_config: list[dict] | None = None,
+    filter_values: dict | None = None,
 ) -> pd.DataFrame:
     """Execute a query defined in JSON config.
 
@@ -306,8 +308,8 @@ def ejecutar_query(
         query_config: Dict with SQL template from JSON:
             {"sql": "SELECT branch, SUM(total_usd) AS Sales FROM data GROUP BY branch"}
             Optionally supports filter placeholders: {"sql": "...", "filtros": ["branch", "date"]}
-        filtros_config: Optional filter definitions for WHERE clause
-        filtros_valores: Optional user-selected filter values
+        filter_config: Optional filter definitions for WHERE clause
+        filter_values: Optional user-selected filter values
 
     Returns:
         DataFrame with query results.
@@ -315,14 +317,14 @@ def ejecutar_query(
     sql = query_config["sql"]
 
     # If no filters, use cache
-    if not filtros_config or not filtros_valores:
+    if not filter_config or not filter_values:
         cached = _get_cached(sql)
         if cached is not None:
             return cached
 
     # If filters are provided, inject WHERE clause using sqlglot
-    if filtros_config and filtros_valores:
-        where, params = _build_where(filtros_config, filtros_valores)
+    if filter_config and filter_values:
+        where, params = _build_where(filter_config, filter_values)
         if where:
             # Extract the conditions from the WHERE clause (remove " WHERE " prefix)
             conditions = where[7:]  # Strip " WHERE " to get just the conditions
@@ -332,7 +334,7 @@ def ejecutar_query(
 
             # Execute with timing
             start = time.time()
-            df = ejecutar(sql, params)
+            df = run_query(sql, params)
             elapsed = time.time() - start
             if elapsed > 2.0:
                 _logger.warning(f"Slow query ({elapsed:.3f}s): {sql[:200]}")
@@ -346,7 +348,7 @@ def ejecutar_query(
 
     # Execute with timing
     start = time.time()
-    df = ejecutar(sql)
+    df = run_query(sql)
     elapsed = time.time() - start
     if elapsed > 2.0:
         _logger.warning(f"Slow query ({elapsed:.3f}s): {sql[:200]}")
@@ -355,10 +357,10 @@ def ejecutar_query(
     return df
 
 
-def ejecutar_kpi(
+def execute_kpi(
     kpi_config: dict,
-    filtros_config: list[dict] | None = None,
-    filtros_valores: dict | None = None,
+    filter_config: list[dict] | None = None,
+    filter_values: dict | None = None,
 ) -> Any:
     """Execute a KPI query and return a single value.
 
@@ -371,13 +373,13 @@ def ejecutar_kpi(
                 "formato": "money",
                 "sub_label": "5 branches"  (optional, can be a SQL too)
             }
-        filtros_config: Optional filter definitions
-        filtros_valores: Optional filter values
+        filter_config: Optional filter definitions
+        filter_values: Optional filter values
 
     Returns:
         The KPI value (float, int, or str).
     """
-    df = ejecutar_query(kpi_config, filtros_config, filtros_valores)
+    df = execute_query(kpi_config, filter_config, filter_values)
     if df.empty:
         return 0
     
@@ -403,11 +405,11 @@ def ejecutar_kpi(
 # Filter options (dynamic)
 # --------------------------------------------------------------------------- #
 
-def obtener_opciones_filtro(filtro_config: dict) -> list:
+def get_filter_options(filter_config: dict) -> list:
     """Get distinct values for a filter from the database.
 
     Args:
-        filtro_config: Dict from JSON:
+        filter_config: Dict from JSON:
             {
                 "nombre": "branch",
                 "columna": "branch",
@@ -418,33 +420,32 @@ def obtener_opciones_filtro(filtro_config: dict) -> list:
     Returns:
         List of distinct values for the filter.
     """
-    tabla = filtro_config["tabla"]
-    columna = filtro_config["columna"]
+    table = filter_config["tabla"]
+    column = filter_config["columna"]
 
-    df = ejecutar(
-        f'SELECT DISTINCT "{columna}" AS v FROM {tabla} WHERE "{columna}" IS NOT NULL ORDER BY v',
+    df = run_query(
+        f'SELECT DISTINCT "{column}" AS v FROM {table} WHERE "{column}" IS NOT NULL ORDER BY v',
     )
     if df.empty:
         return []
     return df["v"].dropna().tolist()
 
 
-def obtener_rango_fechas(filtro_config: dict) -> tuple:
+def get_date_range(filter_config: dict) -> tuple:
     """Get min/max dates for a date range filter.
 
     Args:
-        filtro_config: Dict from JSON with "columna" and "tabla".
+        filter_config: Dict from JSON with "columna" and "tabla".
 
     Returns:
         (min_date, max_date) tuple. If the column is not a real date column,
         returns (None, None) to signal the UI to fall back to a select filter.
     """
-    import datetime as _dt
-    tabla = filtro_config["tabla"]
-    columna = filtro_config["columna"]
+    table = filter_config["tabla"]
+    column = filter_config["columna"]
 
-    df = ejecutar(
-        f'SELECT MIN("{columna}") AS mn, MAX("{columna}") AS mx FROM {tabla} WHERE "{columna}" IS NOT NULL',
+    df = run_query(
+        f'SELECT MIN("{column}") AS mn, MAX("{column}") AS mx FROM {table} WHERE "{column}" IS NOT NULL',
     )
     if df.empty or df.iloc[0, 0] is None:
         return None, None
@@ -453,9 +454,9 @@ def obtener_rango_fechas(filtro_config: dict) -> tuple:
     max_val = df.iloc[0, 1]
     
     def _as_date(v):
-        if isinstance(v, _dt.datetime):
+        if isinstance(v, datetime.datetime):
             return v.date()
-        if isinstance(v, _dt.date):
+        if isinstance(v, datetime.date):
             return v
         # Try pandas datetime conversion
         try:
@@ -483,7 +484,7 @@ def obtener_rango_fechas(filtro_config: dict) -> tuple:
 # UI Config management — validate and save ui_config.json
 # --------------------------------------------------------------------------- #
 
-def _validar_config(config: dict) -> list[str]:
+def _validate_config(config: dict) -> list[str]:
     """Validate a ui_config.json structure and return a list of errors.
     
     Args:
@@ -573,7 +574,7 @@ def _validar_config(config: dict) -> list[str]:
     return errors
 
 
-def _validar_sql_en_config(config: dict) -> list[str]:
+def _validate_sql_in_config(config: dict) -> list[str]:
     """Validate all SQL queries in a config against sqlglot syntax.
 
     Args:
@@ -611,7 +612,7 @@ def _validar_sql_en_config(config: dict) -> list[str]:
     return errors
 
 
-def actualizar_ui_config(config: dict, config_path: Path | None = None) -> str:
+def update_ui_config(config: dict, config_path: Path | None = None) -> str:
     """Validate and save a complete ui_config.json structure.
 
     This is the main function for the MCP agent to update the dashboard
@@ -668,12 +669,12 @@ def actualizar_ui_config(config: dict, config_path: Path | None = None) -> str:
     target_path = config_path or _CONFIG_PATH
 
     # Validate structure
-    errors = _validar_config(config)
+    errors = _validate_config(config)
     if errors:
         return "Validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
 
     # Validate all SQL queries
-    sql_errors = _validar_sql_en_config(config)
+    sql_errors = _validate_sql_in_config(config)
     if sql_errors:
         return "SQL validation failed:\n" + "\n".join(f"  - {e}" for e in sql_errors)
 
@@ -681,7 +682,6 @@ def actualizar_ui_config(config: dict, config_path: Path | None = None) -> str:
     if target_path.exists():
         backup_path = target_path.with_suffix(".json.bak")
         try:
-            import shutil
             shutil.copy2(target_path, backup_path)
             _logger.info(f"Config backed up to {backup_path}")
         except Exception as e:
@@ -719,8 +719,8 @@ def actualizar_ui_config(config: dict, config_path: Path | None = None) -> str:
     clear_query_cache()
 
     # Summary
-    n_modulos = len(config.get("modulos", []))
-    n_filtros = len(config.get("filtros_globales", []))
+    n_modules = len(config.get("modulos", []))
+    n_filters = len(config.get("filtros_globales", []))
     n_mappings = len(config.get("column_mapping", {}))
     n_kpis = sum(len(m.get("kpis", [])) for m in config.get("modulos", []))
     n_charts = sum(len(m.get("graficos", [])) for m in config.get("modulos", []))
@@ -728,14 +728,14 @@ def actualizar_ui_config(config: dict, config_path: Path | None = None) -> str:
     return (
         f"Config saved to {target_path.name}.\n"
         f"  - {n_mappings} column mappings\n"
-        f"  - {n_filtros} global filters\n"
-        f"  - {n_modulos} modules\n"
+        f"  - {n_filters} global filters\n"
+        f"  - {n_modules} modules\n"
         f"  - {n_kpis} KPIs\n"
         f"  - {n_charts} charts\n"
     )
 
 
-def cargar_config(config_path: Path | None = None) -> dict:
+def load_config(config_path: Path | None = None) -> dict:
     """Load the current ui_config.json from disk.
     
     Args:

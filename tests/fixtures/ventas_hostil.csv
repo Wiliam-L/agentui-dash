@@ -1,7 +1,0 @@
-﻿Sucursal,Fecha,Categoría,Monto,Cantidad,Forma de Pago
-"Centro, Norte",2025-01-05,Tecnología,"$1,234.56",2,Tarjeta
-Sucursal Sur,05/02/2025,Hogar,"$89.90",1,Efectivo
-"Sucursal ""Reforma""",2025-02-28,Muebles,"$0.00",3,Transferencia
-  Sucursal Norte  ,31/12/2025,Tecnología,,1,
-Sucursal Este,2025-03-10,<script>alert(1)</script>,"$2,000.00",0,Tarjeta
-Sucursal Sur,2025-03-11,Hogar,N/A,-1,=HYPERLINK("http://evil.test")

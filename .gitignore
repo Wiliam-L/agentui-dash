@@ -7,6 +7,7 @@ __pycache__/
 *.egg
 dist/
 build/
+.pytest_cache
 
 # Environment files
 .env
@@ -42,6 +43,10 @@ desktop.ini
 app_base/.streamlit/*
 !app_base/.streamlit/config.toml
 
+# Streamlit runtime logs
+streamlit.log
+app_base/streamlit.log
+
 # Logs
 *.log
 
@@ -74,9 +79,21 @@ uv.lock
 
 # Uploaded data and manifests
 data_uploaded/
+app_base/data_uploaded/
+app_base/manifest.json
 
-# Large CSV data files (sample data for testing, not source code)
+# Zip archives of the project itself
+*.zip
+
+# Runtime DuckDB databases in app_base
+app_base/*.duckdb
+
+# Large data files (sample data for testing, not source code)
+# Allow test fixtures to be tracked
 *.csv
+!tests/fixtures/*.csv
+*.xlsx
+!tests/fixtures/*.xlsx
 
 # Config backups created by tools.py
 *.json.bak

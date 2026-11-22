@@ -31,7 +31,7 @@ Usuario  →  Agente IA  →  MCP Server  →  ui_config.json  →  Streamlit UI
 
 1. **Usuario** indica un archivo de datos (CSV o Excel) al agente.
 2. **Agente** llama `create_dashboard()`, que encadena: ingesta → detección de columnas → KPIs → gráficos → filtros → guardado de configuración.
-3. **MCP Server** (28 herramientas) detecta los roles de cada columna, genera el SQL y escribe `ui_config.json` de forma atómica.
+3. **MCP Server** detecta los roles de cada columna, genera el SQL y escribe `ui_config.json` de forma atómica.
 4. **ui_config.json** es el contrato: módulos, filtros globales, KPIs con SQL, especificaciones de gráficos y mapeo de columnas.
 5. **Streamlit UI** vigila la fecha de modificación del JSON y se refresca sola cuando cambia (sin reiniciar el servidor).
 6. **DuckDB** ejecuta las consultas con conexiones efímeras de solo lectura.
@@ -46,7 +46,7 @@ Usuario  →  Agente IA  →  MCP Server  →  ui_config.json  →  Streamlit UI
 | `app_base/core/inference.py` | Inteligencia: mapea columnas físicas a roles lógicos | Python |
 | `app_base/core/chart_builder.py` | Construcción y estilos de gráficos Plotly | Plotly |
 | `app_base/ui_config.json` | Contrato completo del dashboard | JSON |
-| `agentui-mcp/server.py` | Servidor MCP expuesto al agente | FastMCP |
+| `agentui_mcp/server.py` | Servidor MCP expuesto al agente | FastMCP |
 
 ### Separación de responsabilidades
 
@@ -64,17 +64,10 @@ La ventaja es directa: el mismo sistema sirve para ventas, inventario, logístic
 
 Requisitos: **Python 3.10+** y [**uv**](https://astral.sh/uv) (`pip install uv`).
 
-Recomendado, desde la raíz del repositorio (un solo entorno virtual):
+Desde la raíz del repositorio:
 
 ```powershell
 uv sync
-```
-
-Alternativa en Windows con los scripts incluidos (crea un entorno local en `app_base/`):
-
-```powershell
-cd app_base
-.\CONFIG_SETUP.bat
 ```
 
 ## Ejecución
@@ -83,12 +76,6 @@ cd app_base
 
 ```powershell
 uv run ui
-```
-
-o, en Windows:
-
-```powershell
-app_base\START_SERVER.bat
 ```
 
 La UI queda disponible en `http://localhost:8501`.
@@ -104,7 +91,7 @@ uv run ui
 ### Servidor MCP
 
 ```powershell
-uv run python agentui-mcp/server.py
+uv run agentui-mcp
 ```
 
 Transporte `stdio`, pensado para que lo arranque el cliente de IA.
@@ -118,7 +105,7 @@ Claude Desktop (`~/.claude/claude_desktop_config.json`):
   "mcpServers": {
     "agentui-dash": {
       "command": "uv",
-      "args": ["run", "python", "agentui-mcp/server.py"],
+      "args": ["run", "agentui-mcp"],
       "cwd": "C:\\ruta\\a\\agentui-dash"
     }
   }
@@ -138,7 +125,7 @@ El agente llamará `create_dashboard()` y devolverá la URL del resultado.
 
 ## Docker
 
-### Dashboard con Docker
+### Dashboard
 
 ```powershell
 docker compose up -d ui
@@ -153,9 +140,7 @@ docker run -p 8501:8501 agentui-dash
 
 La UI quedará en `http://localhost:8501`.
 
-### Servidor MCP con Docker
-
-Para conectar un cliente MCP (Claude Desktop, Cursor, Windsurf) al servidor que corre dentro del contenedor:
+### Servidor MCP
 
 **Opción 1: docker compose (recomendado)**
 
@@ -181,11 +166,11 @@ En `claude_desktop_config.json` (o equivalente) usar el comando `docker` con los
     "agentui-docker": {
       "command": "docker",
       "args": [
-        "exec", 
-        "-i", 
-        "mcp_hackathon-copia-mcp-1", 
-        "python", 
-        "-m", 
+        "exec",
+        "-i",
+        "<nombre-del-contenedor>",
+        "python",
+        "-m",
         "agentui_mcp.server"
       ]
     }
@@ -193,7 +178,7 @@ En `claude_desktop_config.json` (o equivalente) usar el comando `docker` con los
 }
 ```
 
-Nota: el nombre del contenedor (`mcp_hackathon-copia-mcp-1`) depende del proyecto de Docker Compose. Se puede obtener con `docker ps`.
+Nota: el nombre del contenedor depende del proyecto de Docker Compose. Obténlo con `docker ps`.
 
 ---
 
@@ -230,18 +215,20 @@ Todo lo que se ve en pantalla sale de este archivo. Un módulo mínimo se ve as�
 
 Los filtros globales se inyectan automáticamente como cláusula `WHERE` en todas las consultas del módulo.
 
-## Herramientas del MCP (28)
+## Herramientas del MCP
 
 | Categoría | Herramientas |
 |---|---|
 | Dashboard | `create_dashboard` |
-| Datos | `upload_csv`, `upload_multiple_csvs`, `preview_table`, `list_tables`, `get_table_columns`, `explore_data`, `clear_data` |
-| Configuración | `generate_config`, `get_config`, `update_config` |
+| Datos | `upload_csv`, `upload_multiple_csvs`, `update_data`, `analyze_relationships`, `preview_table`, `list_tables`, `get_table_columns`, `explore_data`, `clear_data` |
+| Configuración | `generate_config`, `get_config`, `load_config`, `update_config`, `validate_config`, `cross_validate_config` |
 | Consultas | `run_query`, `run_query_with_filters`, `get_kpi` |
 | Filtros | `get_filter_options`, `get_date_range` |
 | Detección | `detect_columns`, `get_available_roles` |
 | Gráficos | `list_chart_types`, `recommend_chart`, `build_chart_config`, `build_kpi_config`, `build_filter_config`, `build_module_config` |
 | Servidor | `start_streamlit`, `stop_streamlit`, `check_streamlit_status` |
+
+Todas las herramientas son públicas y accesibles por el agente de IA. El motor valida todo el SQL generado mediante `safe_sql()` (con `sqlglot`), la estructura JSON mediante `validate_config()`, y la consistencia de cálculos mediante `cross_validate_config()`, por lo que el agente puede construir dashboards confiables sin riesgo.
 
 ## Gráficos soportados
 
@@ -260,61 +247,78 @@ La UI mantiene un fragmento ligero que comprueba cada 2 segundos la fecha de mod
 
 Por eso el agente puede añadir un KPI o cambiar un gráfico en mitad de una sesión sin reiniciar Streamlit.
 
-## Decisiones de robustez
+## Actualización de datos
+
+El dashboard incluye un **file uploader** en la barra lateral que permite al usuario final actualizar los datos sin depender del agente de IA. La función solo está disponible cuando ya existe un dashboard generado y valida que las columnas del archivo subido coincidan con las esperadas según `ui_config.json`. Si faltan columnas, se rechaza el archivo; si hay columnas adicionales, se acepta con una advertencia.
+
+## Seguridad y robustez
 
 - **Consultas de solo lectura** — la UI abre DuckDB en modo `read_only`; una consulta del dashboard no puede modificar la base de datos.
+- **Validación SQL con allow-list** — `safe_sql()` usa `sqlglot` para parsear el AST y bloquear operaciones de escritura, acceso a archivos o red antes de ejecutar cualquier consulta.
+- **Validación cruzada de cálculos** — `cross_validate_config()` verifica que los totales de los KPIs coincidan con la suma de las barras de los gráficos, detecta valores nulos, comprueba que las columnas referenciadas existen en los resultados SQL, y alerta sobre patrones sospechosos (valores idénticos, ceros inesperados).
 - **Escritura atómica del JSON** — el MCP escribe en un archivo temporal y lo reemplaza con `os.replace`, así la UI nunca lee un JSON a medio escribir.
 - **Última configuración válida** — si el JSON está momentáneamente ilegible (o lleva BOM), se conserva la última configuración buena de la sesión en lugar de caer al dashboard vacío.
-- **Errores visibles** — un SQL que falla ya no se traga en silencio: se registra en `app_base/log_trace_upload_data.log` y la UI muestra un desplegable con el mensaje real de DuckDB.
+- **Errores visibles** — un SQL que falla se registra en el log y la UI muestra un desplegable con el mensaje real de DuckDB.
 - **Conexiones efímeras** — se abren y cierran por consulta para evitar el bloqueo del archivo entre el proceso del MCP y el de Streamlit en Windows, y la conexión de escritura se libera al terminar cada ingesta.
-- **Tema claro fijado** — el tema se define en `.streamlit/config.toml` y en el entrypoint (`--theme.*`), para que los widgets de BaseWeb no hereden el modo oscuro del sistema (el conocido bug de los campos negros).
+- **Tema claro fijado** — el tema se define en `.streamlit/config.toml` y en el entrypoint (`--theme.*`), para que los widgets de BaseWeb no hereden el modo oscuro del sistema.
 
 ## Estructura del repositorio
 
 ```
 .
 ├── pyproject.toml              # Proyecto raíz (uv sync / uv run ui)
-├── .streamlit/config.toml      # Tema claro (obligatorio, no ignorar)
+├── .streamlit/config.toml      # Tema claro
+├── Dockerfile                  # Imagen Docker
+├── docker-compose.yml          # Servicios UI y MCP
 ├── app_base/
+│   ├── .streamlit/config.toml  # Tema claro (app)
 │   ├── core/                   # data.py · tools.py · inference.py · chart_builder.py
 │   ├── streamlit_ui/           # main.py · views/ · styles/
-│   ├── ui_config.json          # Contrato del dashboard
-│   ├── assets/fonts/           # Iconos Material
-│   ├── CONFIG_SETUP.bat        # Setup alternativo (Windows)
-│   ├── START_SERVER.bat        # Arranque alternativo (Windows)
-│   └── README_CLIENTE.md       # Guía para el usuario final
-└── agentui-mcp/
-    └── server.py               # Servidor MCP (28 herramientas)
+│   └── ui_config.json          # Contrato del dashboard
+├── agentui_mcp/
+│   ├── server.py               # Servidor MCP (entry point)
+│   ├── instructions.py         # Instrucciones del agente
+│   ├── utils.py                # Helpers compartidos
+│   └── tools/                  # Herramientas por categoría
+└── tests/
+    ├── test_inference.py       # Tests de inferencia y seguridad SQL
+    ├── test_mcp_tools.py       # Tests de herramientas MCP
+    └── fixtures/               # Datos de prueba
 ```
 
 ---
 
-## Estado y limitaciones conocidas
+## Limitaciones conocidas
 
-- El SQL de los KPIs y gráficos viene del JSON, así que la seguridad depende de lo que genere el agente. Está pendiente añadir un *allow-list* (por ejemplo con `sqlglot`, solo `SELECT`).
-- No hay tests automatizados todavía; `core/inference.py` es el módulo que más los necesita.
 - DuckDB admite un escritor o varios lectores, no ambos a la vez: el diseño usa conexiones efímeras para convivir, pero no es un motor multiusuario.
-- Conviven dos `pyproject.toml` (raíz y `app_base/`) por compatibilidad con los scripts `.bat`; la unificación está en el roadmap.
+- El SQL de los KPIs y gráficos viene del JSON generado por el agente; la validación `safe_sql()` mitiga riesgos, pero la calidad depende de lo que el agente produzca.
+- El dashboard está diseñado para **archivos de datos relacionados** (mismo dominio, misma estructura de columnas). Si se cargan archivos no relacionados, el agente debe usar `analyze_relationships()` para decidir cuáles incluir y generar dashboards separados cuando corresponda.
+- No hay soporte automático para JOINs entre tablas; el agente puede escribir consultas con JOINs manualmente mediante `update_config()`.
 
 ## Roadmap
 
-1. Tests de inferencia (`CSV de ejemplo → roles esperados`) y de contrato (`ui_config.json` válido).
-2. *Allow-list* de SQL + validación estricta de columnas.
-3. Un único `pyproject.toml` y un único entorno virtual.
-4. Exportación a PDF y workspaces múltiples.
+1. Exportación a PDF y workspaces múltiples.
+2. Soporte para fuentes de datos externas (PostgreSQL, MySQL).
+3. Personalización avanzada de temas y layouts.
 
 ---
 
 ## Licencia
 
-Modelo dual:
+AgentUI Dash se distribuye bajo **licencia comercial**. Consulta el archivo
+[LICENSE](LICENSE) para los términos legales completos.
 
-| Versión | Licencia | Uso |
-|---|---|---|
-| Open Source | [MIT](LICENSE) | Código base. Cualquiera puede usarlo, modificarlo y contribuir. |
-| Comercial | [Licencia Comercial](LICENSE-COMMERCIAL.md) | Para clientes que compran el producto. Pueden usarlo, pero no revenderlo ni redistribuirlo. |
+En resumen:
 
-Para adquirir una licencia comercial: contacto@agentui-dash.com
+- Puedes usar, modificar y adaptar el software para tu negocio.
+- Puedes crear dashboards para tus clientes con el software.
+- No puedes revender, sublicenciar o redistribuir el software como producto independiente.
+- No transfieres la propiedad intelectual al autor original.
+
+El autor conserva todos los derechos y puede vender licencias a múltiples compradores.
+Cada licencia es independiente y perpetua.
+
+Para adquirir una licencia o más detalles: [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md)
 
 ---
 

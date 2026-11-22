@@ -1,7 +1,7 @@
 """Inference utility: analyse a DataFrame sample and generate UI configuration.
 
 Owns the ``_ROLES`` dictionary (column synonym knowledge) and uses it to detect
-which physical CSV columns map to which logical roles.  The ``generar_ui_config()``
+which physical CSV columns map to which logical roles.  The ``generate_ui_config()``
 function produces a ``ui_config.json`` with ``column_mapping`` (role → physical
 column name) and chart configs that use physical column names.
 
@@ -102,8 +102,8 @@ _ROLES = {
 }
 
 
-def _detectar_columnas_fisicas(df: pd.DataFrame, tipo: str) -> dict[str, str]:
-    """Given a DataFrame and a table type, return {rol: physical_column_name}.
+def _detect_physical_columns(df: pd.DataFrame, tipo: str) -> dict[str, str]:
+    """Given a DataFrame and a table type, return {role: physical_column_name}.
 
     Iterates ``_ROLES[tipo]`` and matches each role's synonym list against
     the actual DataFrame column names (case-insensitive).
@@ -113,11 +113,11 @@ def _detectar_columnas_fisicas(df: pd.DataFrame, tipo: str) -> dict[str, str]:
     roles = _ROLES.get(tipo, {})
     used: set[str] = set()
 
-    for rol, aliases in roles.items():
+    for role, aliases in roles.items():
         for alias in aliases:
             alias_lower = alias.lower().strip()
             if alias_lower in cols_lower and alias_lower not in used:
-                mapping[rol] = cols_lower[alias_lower]
+                mapping[role] = cols_lower[alias_lower]
                 used.add(alias_lower)
                 break
     return mapping
@@ -125,11 +125,11 @@ def _detectar_columnas_fisicas(df: pd.DataFrame, tipo: str) -> dict[str, str]:
 
 def _count_roles_matched(df: pd.DataFrame, tipo: str) -> int:
     """Count how many roles from _ROLES[tipo] match columns in the DataFrame."""
-    mapping = _detectar_columnas_fisicas(df, tipo)
+    mapping = _detect_physical_columns(df, tipo)
     return len(mapping)
 
 
-def _detectar_tipo(df: pd.DataFrame) -> str | None:
+def _detect_type(df: pd.DataFrame) -> str | None:
     """Detect whether a DataFrame matches a known role set (sales, customers, inventory).
 
     Uses _ROLES as the single source of truth: for each table type, counts how
@@ -139,7 +139,7 @@ def _detectar_tipo(df: pd.DataFrame) -> str | None:
     best_type: str | None = None
     best_count = 0
     for tipo in _ROLES:
-        mapping = _detectar_columnas_fisicas(df, tipo)
+        mapping = _detect_physical_columns(df, tipo)
         if len(mapping) > best_count:
             best_count = len(mapping)
             best_type = tipo
@@ -148,7 +148,7 @@ def _detectar_tipo(df: pd.DataFrame) -> str | None:
     return None
 
 
-def _clasificar_columnas(df: pd.DataFrame) -> dict[str, list[str]]:
+def _classify_columns(df: pd.DataFrame) -> dict[str, list[str]]:
     """Classify DataFrame columns into categories by heuristic analysis.
 
     Returns a dict with keys: 'categorical', 'numeric', 'date', 'high_cardinality'.
@@ -184,7 +184,7 @@ def _clasificar_columnas(df: pd.DataFrame) -> dict[str, list[str]]:
     }
 
 
-def _generar_generico_modulos(
+def _generate_generic_modules(
     df: pd.DataFrame, table_name: str
 ) -> tuple[list[dict], list[dict], dict[str, str]]:
     """Generate a generic dashboard module from ANY DataFrame using heuristics.
@@ -203,18 +203,18 @@ def _generar_generico_modulos(
         table_name: DuckDB table name for SQL generation.
 
     Returns:
-        Tuple of (modulos, filtros_globales, column_mapping).
+        Tuple of (modules, global_filters, column_mapping).
     """
     t = table_name
-    classified = _clasificar_columnas(df)
+    classified = _classify_columns(df)
     cat_cols = classified["categorical"]
     num_cols = classified["numeric"]
     date_cols = classified["date"]
 
     column_mapping: dict[str, str] = {}
-    filtros: list[dict] = []
+    filters: list[dict] = []
     kpis: list[dict] = []
-    graficos: list[dict] = []
+    charts: list[dict] = []
 
     # --- KPIs: count rows + SUM/AVG for each numeric column ---
     kpis.append({
@@ -248,7 +248,7 @@ def _generar_generico_modulos(
         for nc in num_cols:
             cat_label = cc.replace("_", " ").title()
             num_label = nc.replace("_", " ").title()
-            graficos.append({
+            charts.append({
                 "tipo": "bar",
                 "titulo": f"{num_label} by {cat_label}",
                 "sub": f"Sum of {nc} grouped by {cc}",
@@ -268,7 +268,7 @@ def _generar_generico_modulos(
             nc = num_cols[0]
             cat_label = cc.replace("_", " ").title()
             num_label = nc.replace("_", " ").title()
-            graficos.append({
+            charts.append({
                 "tipo": "pie",
                 "titulo": f"Share of {num_label} by {cat_label}",
                 "sub": f"Distribution of {nc} across {cc}",
@@ -285,7 +285,7 @@ def _generar_generico_modulos(
         for nc in num_cols:
             date_label = dc.replace("_", " ").title()
             num_label = nc.replace("_", " ").title()
-            graficos.append({
+            charts.append({
                 "tipo": "line",
                 "titulo": f"{num_label} over {date_label}",
                 "sub": f"Trend of {nc} over time",
@@ -301,18 +301,18 @@ def _generar_generico_modulos(
     for cc in cat_cols:
         unique_count = df[cc].nunique()
         if unique_count <= 30:
-            filtro_tipo = "multiselect" if unique_count > 5 else "select"
-            filtros.append({
+            filter_type = "multiselect" if unique_count > 5 else "select"
+            filters.append({
                 "nombre": cc,
                 "etiqueta": cc.replace("_", " ").title(),
                 "columna": cc,
                 "tabla": t,
-                "tipo": filtro_tipo,
+                "tipo": filter_type,
             })
 
     # --- Filters for date columns ---
     for dc in date_cols:
-        filtros.append({
+        filters.append({
             "nombre": dc,
             "etiqueta": dc.replace("_", " ").title(),
             "columna": dc,
@@ -321,7 +321,7 @@ def _generar_generico_modulos(
         })
 
     # --- Data preview table ---
-    tablas: list[dict] = [{
+    tables: list[dict] = [{
         "titulo": "Data Preview",
         "sub": "First 100 rows of the dataset",
         "icono": "table_chart",
@@ -331,7 +331,7 @@ def _generar_generico_modulos(
     }]
 
     # Build module
-    modulos: list[dict] = [{
+    modules: list[dict] = [{
         "id": "explorer",
         "nombre": "Data Explorer",
         "icono": "🔍",
@@ -339,14 +339,14 @@ def _generar_generico_modulos(
         "material_icon": "insights",
         "breadcrumbs": "HOME  /  DATA EXPLORER",
         "kpis": kpis,
-        "graficos": graficos,
-        "tablas": tablas,
+        "graficos": charts,
+        "tablas": tables,
     }]
 
-    return modulos, filtros, column_mapping
+    return modules, filters, column_mapping
 
 
-def generar_ui_config(df_head: pd.DataFrame, table_name: str = "data") -> dict[str, Any]:
+def generate_ui_config(df_head: pd.DataFrame, table_name: str = "data") -> dict[str, Any]:
     """Analyse *df_head* (first ~100 rows) and return a full UI config dictionary.
 
     Uses ``_ROLES`` to detect physical columns, builds ``column_mapping``,
@@ -369,21 +369,21 @@ def generar_ui_config(df_head: pd.DataFrame, table_name: str = "data") -> dict[s
     Returns:
         A dict ready to be written as ui_config.json.
     """
-    tipo = _detectar_tipo(df_head)
+    tipo = _detect_type(df_head)
 
     if tipo is not None:
         # Known role set matched — use specialized generators
-        col_map = _detectar_columnas_fisicas(df_head, tipo)
+        col_map = _detect_physical_columns(df_head, tipo)
 
         column_mapping: dict[str, str] = {}
-        for rol, col in col_map.items():
-            column_mapping[f"{tipo}_{rol}"] = col
+        for role, col in col_map.items():
+            column_mapping[f"{tipo}_{role}"] = col
 
-        filtros = _generar_filtros(tipo, col_map, table_name)
-        modulos = _generar_modulos(tipo, col_map, table_name)
+        filters = _generate_filters(tipo, col_map, table_name)
+        modules = _generate_modules(tipo, col_map, table_name)
     else:
         # No known role set matched — use generic heuristic-based generator
-        modulos, filtros, column_mapping = _generar_generico_modulos(df_head, table_name)
+        modules, filters, column_mapping = _generate_generic_modules(df_head, table_name)
 
     # Build the full config
     config: dict[str, Any] = {
@@ -392,8 +392,8 @@ def generar_ui_config(df_head: pd.DataFrame, table_name: str = "data") -> dict[s
         "brand_sub": "",
         "brand_icon": "dashboard",
         "column_mapping": column_mapping,
-        "filtros_globales": filtros,
-        "modulos": modulos,
+        "filtros_globales": filters,
+        "modulos": modules,
         "sidebar_disclaimer": "",
         "footer": "",
         "empty_state": {
@@ -405,7 +405,7 @@ def generar_ui_config(df_head: pd.DataFrame, table_name: str = "data") -> dict[s
     return config
 
 
-def _generar_filtros(tipo: str, col_map: dict[str, str], table_name: str) -> list[dict]:
+def _generate_filters(tipo: str, col_map: dict[str, str], table_name: str) -> list[dict]:
     """Generate filter definitions based on detected columns.
 
     All labels are derived from the actual physical column names — no hardcoded
@@ -416,32 +416,32 @@ def _generar_filtros(tipo: str, col_map: dict[str, str], table_name: str) -> lis
         col_map: {role: physical_column} mapping.
         table_name: DuckDB table name for filter SQL.
     """
-    filtros: list[dict] = []
+    filters: list[dict] = []
 
     if tipo == "sales":
-        suc = col_map.get("sucursal")
-        fecha = col_map.get("fecha")
+        branch = col_map.get("sucursal")
+        date = col_map.get("fecha")
         cat = col_map.get("categoria")
 
-        if suc:
-            filtros.append({
-                "nombre": suc,
-                "etiqueta": suc.replace("_", " ").title(),
-                "columna": suc,
+        if branch:
+            filters.append({
+                "nombre": branch,
+                "etiqueta": branch.replace("_", " ").title(),
+                "columna": branch,
                 "tabla": table_name,
                 "tipo": "select",
-                "todos_label": f"All {suc.replace('_', ' ').lower()}",
+                "todos_label": f"All {branch.replace('_', ' ').lower()}",
             })
-        if fecha:
-            filtros.append({
-                "nombre": fecha,
-                "etiqueta": fecha.replace("_", " ").title(),
-                "columna": fecha,
+        if date:
+            filters.append({
+                "nombre": date,
+                "etiqueta": date.replace("_", " ").title(),
+                "columna": date,
                 "tabla": table_name,
                 "tipo": "date_range",
             })
         if cat:
-            filtros.append({
+            filters.append({
                 "nombre": cat,
                 "etiqueta": cat.replace("_", " ").title(),
                 "columna": cat,
@@ -451,30 +451,30 @@ def _generar_filtros(tipo: str, col_map: dict[str, str], table_name: str) -> lis
 
     elif tipo == "customers":
         seg = col_map.get("segmento")
-        estado = col_map.get("estado")
-        canal = col_map.get("canal")
+        state = col_map.get("estado")
+        channel = col_map.get("canal")
         if seg:
-            filtros.append({"nombre": seg, "etiqueta": seg.replace("_", " ").title(), "columna": seg, "tabla": table_name, "tipo": "select", "todos_label": f"All {seg.replace('_', ' ').lower()}"})
-        if estado:
-            filtros.append({"nombre": estado, "etiqueta": estado.replace("_", " ").title(), "columna": estado, "tabla": table_name, "tipo": "select", "todos_label": f"All {estado.replace('_', ' ').lower()}"})
-        if canal:
-            filtros.append({"nombre": canal, "etiqueta": canal.replace("_", " ").title(), "columna": canal, "tabla": table_name, "tipo": "multiselect"})
+            filters.append({"nombre": seg, "etiqueta": seg.replace("_", " ").title(), "columna": seg, "tabla": table_name, "tipo": "select", "todos_label": f"All {seg.replace('_', ' ').lower()}"})
+        if state:
+            filters.append({"nombre": state, "etiqueta": state.replace("_", " ").title(), "columna": state, "tabla": table_name, "tipo": "select", "todos_label": f"All {state.replace('_', ' ').lower()}"})
+        if channel:
+            filters.append({"nombre": channel, "etiqueta": channel.replace("_", " ").title(), "columna": channel, "tabla": table_name, "tipo": "multiselect"})
 
     elif tipo == "inventory":
         cat = col_map.get("categoria")
-        marca = col_map.get("marca")
-        estado = col_map.get("estado_stock")
+        brand = col_map.get("marca")
+        status = col_map.get("estado_stock")
         if cat:
-            filtros.append({"nombre": cat, "etiqueta": cat.replace("_", " ").title(), "columna": cat, "tabla": table_name, "tipo": "multiselect"})
-        if marca:
-            filtros.append({"nombre": marca, "etiqueta": marca.replace("_", " ").title(), "columna": marca, "tabla": table_name, "tipo": "select", "todos_label": f"All {marca.replace('_', ' ').lower()}"})
-        if estado:
-            filtros.append({"nombre": estado, "etiqueta": estado.replace("_", " ").title(), "columna": estado, "tabla": table_name, "tipo": "select", "todos_label": f"All {estado.replace('_', ' ').lower()}"})
+            filters.append({"nombre": cat, "etiqueta": cat.replace("_", " ").title(), "columna": cat, "tabla": table_name, "tipo": "multiselect"})
+        if brand:
+            filters.append({"nombre": brand, "etiqueta": brand.replace("_", " ").title(), "columna": brand, "tabla": table_name, "tipo": "select", "todos_label": f"All {brand.replace('_', ' ').lower()}"})
+        if status:
+            filters.append({"nombre": status, "etiqueta": status.replace("_", " ").title(), "columna": status, "tabla": table_name, "tipo": "select", "todos_label": f"All {status.replace('_', ' ').lower()}"})
 
-    return filtros
+    return filters
 
 
-def _generar_modulos(tipo: str, col_map: dict[str, str], table_name: str) -> list[dict]:
+def _generate_modules(tipo: str, col_map: dict[str, str], table_name: str) -> list[dict]:
     """Generate module configs with KPIs, charts, and tables based on detected columns.
 
     Args:
@@ -482,16 +482,16 @@ def _generar_modulos(tipo: str, col_map: dict[str, str], table_name: str) -> lis
         col_map: {role: physical_column} mapping.
         table_name: DuckDB table name for all generated SQL.
     """
-    modulos: list[dict] = []
+    modules: list[dict] = []
 
     if tipo == "sales":
-        modulos.extend(_generar_sales_modulos(col_map, table_name))
+        modules.extend(_generate_sales_modules(col_map, table_name))
     elif tipo == "inventory":
-        modulos.extend(_generar_inventory_modulos(col_map, table_name))
+        modules.extend(_generate_inventory_modules(col_map, table_name))
     elif tipo == "customers":
-        modulos.extend(_generar_customers_modulos(col_map, table_name))
+        modules.extend(_generate_customers_modules(col_map, table_name))
 
-    return modulos
+    return modules
 
 
 def _q(col: str) -> str:
@@ -499,7 +499,7 @@ def _q(col: str) -> str:
     return '"' + str(col).replace('"', '""') + '"'
 
 
-def _generar_sales_modulos(col_map: dict[str, str], table_name: str) -> list[dict]:
+def _generate_sales_modules(col_map: dict[str, str], table_name: str) -> list[dict]:
     """Generate dashboard and operations modules for sales-like data.
 
     All labels, titles, and descriptions are derived from the actual physical
@@ -509,38 +509,38 @@ def _generar_sales_modulos(col_map: dict[str, str], table_name: str) -> list[dic
         col_map: {role: physical_column} mapping.
         table_name: DuckDB table name for all generated SQL.
     """
-    suc = col_map.get("sucursal")
-    fecha = col_map.get("fecha")
+    branch = col_map.get("sucursal")
+    date = col_map.get("fecha")
     cat = col_map.get("categoria")
-    monto = col_map.get("monto")
-    metodo = col_map.get("metodo")
-    turno = col_map.get("turno")
-    cajero = col_map.get("cajero")
+    amount = col_map.get("monto")
+    method = col_map.get("metodo")
+    shift = col_map.get("turno")
+    cashier = col_map.get("cajero")
 
-    modulos: list[dict] = []
+    modules: list[dict] = []
     t = table_name
 
     # Helper: human-readable label from column name
     def _lbl(col: str) -> str:
         return col.replace("_", " ").title()
 
-    monto_lbl = _lbl(monto) if monto else "Amount"
-    suc_lbl = _lbl(suc) if suc else "Group"
+    amount_lbl = _lbl(amount) if amount else "Amount"
+    branch_lbl = _lbl(branch) if branch else "Group"
     cat_lbl = _lbl(cat) if cat else "Category"
-    metodo_lbl = _lbl(metodo) if metodo else "Method"
-    turno_lbl = _lbl(turno) if turno else "Shift"
-    cajero_lbl = _lbl(cajero) if cajero else "Person"
+    method_lbl = _lbl(method) if method else "Method"
+    shift_lbl = _lbl(shift) if shift else "Shift"
+    cashier_lbl = _lbl(cashier) if cashier else "Person"
 
     # Avoid "Total Total X" when column already contains "total"
-    monto_sum_label = monto_lbl if monto_lbl.lower().startswith("total") else f"Total {monto_lbl}"
+    amount_sum_label = amount_lbl if amount_lbl.lower().startswith("total") else f"Total {amount_lbl}"
 
     # Dashboard module
     dashboard_kpis: list[dict] = []
-    if monto:
+    if amount:
         dashboard_kpis.append({
             "icono": "payments",
-            "label": monto_sum_label,
-            "sql": f"SELECT COALESCE(SUM({_q(monto)}), 0) AS v FROM {t}",
+            "label": amount_sum_label,
+            "sql": f"SELECT COALESCE(SUM({_q(amount)}), 0) AS v FROM {t}",
             "formato": "money",
             "color": "#246bfd",
         })
@@ -554,171 +554,171 @@ def _generar_sales_modulos(col_map: dict[str, str], table_name: str) -> list[dic
         })
         dashboard_kpis.append({
             "icono": "point_of_sale",
-            "label": f"Avg {monto_lbl}",
-            "sql": f"SELECT COALESCE(AVG({_q(monto)}), 0) AS v FROM {t}",
+            "label": f"Avg {amount_lbl}",
+            "sql": f"SELECT COALESCE(AVG({_q(amount)}), 0) AS v FROM {t}",
             "formato": "money",
-            "sub_label": f"average {monto_lbl.lower()} per record",
+            "sub_label": f"average {amount_lbl.lower()} per record",
             "color": "#f59e0b",
         })
 
-    if suc and dashboard_kpis:
-        dashboard_kpis[0]["sub_sql"] = f"SELECT COUNT(DISTINCT {_q(suc)}) AS v FROM {t}"
-        dashboard_kpis[0]["sub_suffix"] = f" {suc_lbl.lower()}s"
+    if branch and dashboard_kpis:
+        dashboard_kpis[0]["sub_sql"] = f"SELECT COUNT(DISTINCT {_q(branch)}) AS v FROM {t}"
+        dashboard_kpis[0]["sub_suffix"] = f" {branch_lbl.lower()}s"
 
-    if cat and monto:
+    if cat and amount:
         dashboard_kpis.append({
             "icono": "category",
             "label": f"Top {cat_lbl}",
-            "sql": f"SELECT {_q(cat)} AS v FROM {t} WHERE {_q(cat)} IS NOT NULL GROUP BY {_q(cat)} ORDER BY COALESCE(SUM({_q(monto)}), 0) DESC LIMIT 1",
+            "sql": f"SELECT {_q(cat)} AS v FROM {t} WHERE {_q(cat)} IS NOT NULL GROUP BY {_q(cat)} ORDER BY COALESCE(SUM({_q(amount)}), 0) DESC LIMIT 1",
             "formato": "str",
-            "sub_sql": f"SELECT COUNT(*) AS v FROM {t} WHERE {_q(cat)} = (SELECT {_q(cat)} FROM {t} WHERE {_q(cat)} IS NOT NULL GROUP BY {_q(cat)} ORDER BY COALESCE(SUM({_q(monto)}), 0) DESC LIMIT 1)",
-            "sub_suffix": f" {monto_lbl.lower()} records",
+            "sub_sql": f"SELECT COUNT(*) AS v FROM {t} WHERE {_q(cat)} = (SELECT {_q(cat)} FROM {t} WHERE {_q(cat)} IS NOT NULL GROUP BY {_q(cat)} ORDER BY COALESCE(SUM({_q(amount)}), 0) DESC LIMIT 1)",
+            "sub_suffix": f" {amount_lbl.lower()} records",
             "color": "#8b5cf6",
         })
 
-    dashboard_graficos: list[dict] = []
-    if suc and monto:
-        dashboard_graficos.append({
+    dashboard_charts: list[dict] = []
+    if branch and amount:
+        dashboard_charts.append({
             "tipo": "bar",
-            "titulo": f"{monto_lbl} by {suc_lbl}",
-            "sub": f"Total {monto_lbl.lower()} by {suc_lbl.lower()}",
+            "titulo": f"{amount_lbl} by {branch_lbl}",
+            "sub": f"Total {amount_lbl.lower()} by {branch_lbl.lower()}",
             "icono": "storefront",
-            "sql": f"SELECT {_q(suc)} AS {suc_lbl}, COALESCE(SUM({_q(monto)}), 0) AS Total FROM {t} WHERE {_q(suc)} IS NOT NULL GROUP BY {_q(suc)} ORDER BY Total DESC",
-            "x": suc_lbl,
+            "sql": f"SELECT {_q(branch)} AS {branch_lbl}, COALESCE(SUM({_q(amount)}), 0) AS Total FROM {t} WHERE {_q(branch)} IS NOT NULL GROUP BY {_q(branch)} ORDER BY Total DESC",
+            "x": branch_lbl,
             "y": "Total",
             "alto": 380,
             "col_izq": 1.25,
         })
-    if cat and monto:
-        dashboard_graficos.append({
+    if cat and amount:
+        dashboard_charts.append({
             "tipo": "pie",
-            "titulo": f"Share of {monto_lbl} by {cat_lbl}",
-            "sub": f"{monto_lbl.lower()} share per {cat_lbl.lower()}",
+            "titulo": f"Share of {amount_lbl} by {cat_lbl}",
+            "sub": f"{amount_lbl.lower()} share per {cat_lbl.lower()}",
             "icono": "pie_chart",
-            "sql": f"SELECT {_q(cat)} AS {cat_lbl}, COALESCE(SUM({_q(monto)}), 0) AS Total FROM {t} WHERE {_q(cat)} IS NOT NULL GROUP BY {_q(cat)} ORDER BY Total DESC",
+            "sql": f"SELECT {_q(cat)} AS {cat_lbl}, COALESCE(SUM({_q(amount)}), 0) AS Total FROM {t} WHERE {_q(cat)} IS NOT NULL GROUP BY {_q(cat)} ORDER BY Total DESC",
             "columna": cat_lbl,
             "valores": "Total",
             "alto": 380,
             "col_izq": 1,
         })
 
-    modulos.append({
+    modules.append({
         "id": "overview",
         "nombre": "Overview",
         "icono": "\U0001f4ca",
-        "descripcion": f"Summary of {monto_lbl.lower()} data.",
+        "descripcion": f"Summary of {amount_lbl.lower()} data.",
         "material_icon": "dashboard",
         "breadcrumbs": "HOME  /  OVERVIEW",
         "kpis": dashboard_kpis,
-        "graficos": dashboard_graficos,
+        "graficos": dashboard_charts,
     })
 
     # Operations module (only if there are operational columns)
     ops_kpis: list[dict] = []
-    if turno:
+    if shift:
         ops_kpis.append({
             "icono": "schedule",
-            "label": f"{turno_lbl} Count",
-            "sql": f"SELECT COUNT(DISTINCT {_q(turno)}) AS v FROM {t}",
+            "label": f"{shift_lbl} Count",
+            "sql": f"SELECT COUNT(DISTINCT {_q(shift)}) AS v FROM {t}",
             "formato": "int",
-            "sub_label": f"distinct {turno_lbl.lower()} values",
+            "sub_label": f"distinct {shift_lbl.lower()} values",
             "color": "#246bfd",
         })
-    if cajero:
+    if cashier:
         ops_kpis.append({
             "icono": "badge",
-            "label": f"Unique {cajero_lbl}",
-            "sql": f"SELECT COUNT(DISTINCT {_q(cajero)}) AS v FROM {t}",
+            "label": f"Unique {cashier_lbl}",
+            "sql": f"SELECT COUNT(DISTINCT {_q(cashier)}) AS v FROM {t}",
             "formato": "int",
-            "sub_label": f"registered {cajero_lbl.lower()}",
+            "sub_label": f"registered {cashier_lbl.lower()}",
             "color": "#12b76a",
         })
-    if metodo:
+    if method:
         ops_kpis.append({
             "icono": "credit_card",
-            "label": f"{metodo_lbl} Count",
-            "sql": f"SELECT COUNT(DISTINCT {_q(metodo)}) AS v FROM {t}",
+            "label": f"{method_lbl} Count",
+            "sql": f"SELECT COUNT(DISTINCT {_q(method)}) AS v FROM {t}",
             "formato": "int",
-            "sub_label": f"distinct {metodo_lbl.lower()}",
+            "sub_label": f"distinct {method_lbl.lower()}",
             "color": "#f59e0b",
         })
-        if monto:
+        if amount:
             ops_kpis.append({
                 "icono": "payments",
-                "label": f"Top {metodo_lbl}",
-                "sql": f"SELECT {_q(metodo)} AS v FROM {t} WHERE {_q(metodo)} IS NOT NULL GROUP BY {_q(metodo)} ORDER BY COALESCE(SUM({_q(monto)}), 0) DESC LIMIT 1",
+                "label": f"Top {method_lbl}",
+                "sql": f"SELECT {_q(method)} AS v FROM {t} WHERE {_q(method)} IS NOT NULL GROUP BY {_q(method)} ORDER BY COALESCE(SUM({_q(amount)}), 0) DESC LIMIT 1",
                 "formato": "str",
-                "sub_sql": f"SELECT COALESCE(SUM({_q(monto)}), 0) AS v FROM {t}",
+                "sub_sql": f"SELECT COALESCE(SUM({_q(amount)}), 0) AS v FROM {t}",
                 "sub_prefix": "$",
-                "sub_suffix": f" {monto_lbl.lower()} total",
+                "sub_suffix": f" {amount_lbl.lower()} total",
                 "color": "#8b5cf6",
             })
 
-    ops_graficos: list[dict] = []
-    if turno and monto:
-        ops_graficos.append({
+    ops_charts: list[dict] = []
+    if shift and amount:
+        ops_charts.append({
             "tipo": "bar",
-            "titulo": f"{monto_lbl} by {turno_lbl}",
-            "sub": f"{monto_lbl.lower()} by {turno_lbl.lower()}",
+            "titulo": f"{amount_lbl} by {shift_lbl}",
+            "sub": f"{amount_lbl.lower()} by {shift_lbl.lower()}",
             "icono": "schedule",
-            "sql": f"SELECT {_q(turno)} AS {turno_lbl}, COALESCE(SUM({_q(monto)}), 0) AS Total, COUNT(*) AS Records FROM {t} WHERE {_q(turno)} IS NOT NULL GROUP BY {_q(turno)} ORDER BY Total",
-            "x": turno_lbl,
+            "sql": f"SELECT {_q(shift)} AS {shift_lbl}, COALESCE(SUM({_q(amount)}), 0) AS Total, COUNT(*) AS Records FROM {t} WHERE {_q(shift)} IS NOT NULL GROUP BY {_q(shift)} ORDER BY Total",
+            "x": shift_lbl,
             "y": "Total",
             "alto": 350,
             "col_izq": 1.15,
         })
-    if metodo and monto:
-        ops_graficos.append({
+    if method and amount:
+        ops_charts.append({
             "tipo": "pie",
-            "titulo": f"{metodo_lbl} Distribution",
-            "sub": f"{monto_lbl.lower()} by {metodo_lbl.lower()}",
+            "titulo": f"{method_lbl} Distribution",
+            "sub": f"{amount_lbl.lower()} by {method_lbl.lower()}",
             "icono": "credit_card",
-            "sql": f"SELECT {_q(metodo)} AS {metodo_lbl}, COALESCE(SUM({_q(monto)}), 0) AS Total, COUNT(*) AS Records FROM {t} WHERE {_q(metodo)} IS NOT NULL GROUP BY {_q(metodo)} ORDER BY Total DESC",
-            "columna": metodo_lbl,
+            "sql": f"SELECT {_q(method)} AS {method_lbl}, COALESCE(SUM({_q(amount)}), 0) AS Total, COUNT(*) AS Records FROM {t} WHERE {_q(method)} IS NOT NULL GROUP BY {_q(method)} ORDER BY Total DESC",
+            "columna": method_lbl,
             "valores": "Total",
             "alto": 350,
             "col_izq": 1,
         })
-    if cajero and monto:
-        ops_graficos.append({
+    if cashier and amount:
+        ops_charts.append({
             "tipo": "bar_h",
-            "titulo": f"{cajero_lbl} Performance",
-            "sub": f"Top {cajero_lbl.lower()} by {monto_lbl.lower()}",
+            "titulo": f"{cashier_lbl} Performance",
+            "sub": f"Top {cashier_lbl.lower()} by {amount_lbl.lower()}",
             "icono": "person_pin",
-            "sql": f"SELECT {_q(cajero)} AS {cajero_lbl}, COUNT(*) AS Records, COALESCE(SUM({_q(monto)}), 0) AS Total, COALESCE(AVG({_q(monto)}), 0) AS AvgVal FROM {t} WHERE {_q(cajero)} IS NOT NULL GROUP BY {_q(cajero)} ORDER BY Total DESC LIMIT 12",
+            "sql": f"SELECT {_q(cashier)} AS {cashier_lbl}, COUNT(*) AS Records, COALESCE(SUM({_q(amount)}), 0) AS Total, COALESCE(AVG({_q(amount)}), 0) AS AvgVal FROM {t} WHERE {_q(cashier)} IS NOT NULL GROUP BY {_q(cashier)} ORDER BY Total DESC LIMIT 12",
             "x": "Total",
-            "y": cajero_lbl,
+            "y": cashier_lbl,
             "alto": 420,
         })
-    if turno and metodo and monto:
-        ops_graficos.append({
+    if shift and method and amount:
+        ops_charts.append({
             "tipo": "heatmap",
-            "titulo": f"{turno_lbl} & {metodo_lbl} Cross Analysis",
-            "sub": f"{metodo_lbl.lower()} per {turno_lbl.lower()}",
+            "titulo": f"{shift_lbl} & {method_lbl} Cross Analysis",
+            "sub": f"{method_lbl.lower()} per {shift_lbl.lower()}",
             "icono": "table_chart",
-            "sql": f"SELECT {_q(turno)} AS {turno_lbl}, {_q(metodo)} AS {metodo_lbl}, COALESCE(SUM({_q(monto)}), 0) AS Total FROM {t} WHERE {_q(turno)} IS NOT NULL AND {_q(metodo)} IS NOT NULL GROUP BY {_q(turno)}, {_q(metodo)}",
-            "x": turno_lbl,
-            "y": metodo_lbl,
+            "sql": f"SELECT {_q(shift)} AS {shift_lbl}, {_q(method)} AS {method_lbl}, COALESCE(SUM({_q(amount)}), 0) AS Total FROM {t} WHERE {_q(shift)} IS NOT NULL AND {_q(method)} IS NOT NULL GROUP BY {_q(shift)}, {_q(method)}",
+            "x": shift_lbl,
+            "y": method_lbl,
             "valores": "Total",
             "alto": 320,
         })
 
-    if ops_kpis or ops_graficos:
-        modulos.append({
+    if ops_kpis or ops_charts:
+        modules.append({
             "id": "details",
             "nombre": "Details",
             "icono": "\U0001f3ea",
-            "descripcion": f"Detailed breakdown by {', '.join(lbl for lbl in [turno_lbl, cajero_lbl, metodo_lbl] if lbl != 'Shift' or turno)}.",
+            "descripcion": f"Detailed breakdown by {', '.join(lbl for lbl in [shift_lbl, cashier_lbl, method_lbl] if lbl != 'Shift' or shift)}.",
             "material_icon": "insights",
             "breadcrumbs": "HOME  /  DETAILS",
             "kpis": ops_kpis,
-            "graficos": ops_graficos,
+            "graficos": ops_charts,
         })
 
-    return modulos
+    return modules
 
 
-def _generar_inventory_modulos(col_map: dict[str, str], table_name: str) -> list[dict]:
+def _generate_inventory_modules(col_map: dict[str, str], table_name: str) -> list[dict]:
     """Generate inventory module.
 
     All labels are derived from the actual physical column names.
@@ -727,11 +727,11 @@ def _generar_inventory_modulos(col_map: dict[str, str], table_name: str) -> list
         col_map: {role: physical_column} mapping.
         table_name: DuckDB table name for all generated SQL.
     """
-    estado = col_map.get("estado_stock")
+    status = col_map.get("estado_stock")
     cat = col_map.get("categoria")
-    marca = col_map.get("marca")
-    precio = col_map.get("precio")
-    costo = col_map.get("costo")
+    brand = col_map.get("marca")
+    price = col_map.get("precio")
+    cost = col_map.get("costo")
     stock = col_map.get("stock")
     stock_min = col_map.get("stock_min")
     sku = col_map.get("sku")
@@ -743,11 +743,11 @@ def _generar_inventory_modulos(col_map: dict[str, str], table_name: str) -> list
 
     stock_lbl = _lbl(stock) if stock else "Stock"
     stock_min_lbl = _lbl(stock_min) if stock_min else "Min Stock"
-    estado_lbl = _lbl(estado) if estado else "Status"
+    status_lbl = _lbl(status) if status else "Status"
     cat_lbl = _lbl(cat) if cat else "Category"
-    marca_lbl = _lbl(marca) if marca else "Brand"
-    precio_lbl = _lbl(precio) if precio else "Price"
-    costo_lbl = _lbl(costo) if costo else "Cost"
+    brand_lbl = _lbl(brand) if brand else "Brand"
+    price_lbl = _lbl(price) if price else "Price"
+    cost_lbl = _lbl(cost) if cost else "Cost"
     sku_lbl = _lbl(sku) if sku else "SKU"
 
     kpis: list[dict] = []
@@ -789,47 +789,47 @@ def _generar_inventory_modulos(col_map: dict[str, str], table_name: str) -> list
             "color": "#ef4444",
         })
 
-    graficos: list[dict] = []
-    if estado:
-        graficos.append({
+    charts: list[dict] = []
+    if status:
+        charts.append({
             "tipo": "bar_h",
-            "titulo": f"{estado_lbl} Distribution",
-            "sub": f"Items by {estado_lbl.lower()}",
+            "titulo": f"{status_lbl} Distribution",
+            "sub": f"Items by {status_lbl.lower()}",
             "icono": "inventory",
-            "sql": f"SELECT {_q(estado)} AS {estado_lbl}, COUNT(*) AS Count FROM {t} WHERE {_q(estado)} IS NOT NULL GROUP BY {_q(estado)} ORDER BY Count",
+            "sql": f"SELECT {_q(status)} AS {status_lbl}, COUNT(*) AS Count FROM {t} WHERE {_q(status)} IS NOT NULL GROUP BY {_q(status)} ORDER BY Count",
             "x": "Count",
-            "y": estado_lbl,
+            "y": status_lbl,
             "alto": 340,
             "col_izq": 1.15,
         })
-    if cat and precio and costo:
-        graficos.append({
+    if cat and price and cost:
+        charts.append({
             "tipo": "bar_h",
             "titulo": f"Margin by {cat_lbl}",
-            "sub": f"Average {precio_lbl.lower()} minus {costo_lbl.lower()} by {cat_lbl.lower()}",
+            "sub": f"Average {price_lbl.lower()} minus {cost_lbl.lower()} by {cat_lbl.lower()}",
             "icono": "percent",
-            "sql": f"SELECT {_q(cat)} AS {cat_lbl}, COALESCE(AVG({_q(precio)} - {_q(costo)}), 0) AS avg_margin, COUNT(*) AS Count FROM {t} WHERE {_q(cat)} IS NOT NULL GROUP BY {_q(cat)} ORDER BY avg_margin",
+            "sql": f"SELECT {_q(cat)} AS {cat_lbl}, COALESCE(AVG({_q(price)} - {_q(cost)}), 0) AS avg_margin, COUNT(*) AS Count FROM {t} WHERE {_q(cat)} IS NOT NULL GROUP BY {_q(cat)} ORDER BY avg_margin",
             "x": "avg_margin",
             "y": cat_lbl,
             "alto": 340,
             "col_izq": 1,
         })
-    if marca and precio and costo and stock:
-        graficos.append({
+    if brand and price and cost and stock:
+        charts.append({
             "tipo": "scatter",
-            "titulo": f"Margin vs {stock_lbl} by {marca_lbl}",
-            "sub": f"Margin % vs {stock_lbl.lower()} by {marca_lbl.lower()}",
+            "titulo": f"Margin vs {stock_lbl} by {brand_lbl}",
+            "sub": f"Margin % vs {stock_lbl.lower()} by {brand_lbl.lower()}",
             "icono": "storefront",
-            "sql": f"SELECT {_q(marca)} AS {marca_lbl}, COALESCE(AVG(({_q(precio)} - {_q(costo)}) / NULLIF({_q(precio)}, 0)) * 100, 0) AS Margin_pct, COALESCE(SUM({_q(stock)}), 0) AS Total FROM {t} WHERE {_q(marca)} IS NOT NULL GROUP BY {_q(marca)} ORDER BY Total DESC",
+            "sql": f"SELECT {_q(brand)} AS {brand_lbl}, COALESCE(AVG(({_q(price)} - {_q(cost)}) / NULLIF({_q(price)}, 0)) * 100, 0) AS Margin_pct, COALESCE(SUM({_q(stock)}), 0) AS Total FROM {t} WHERE {_q(brand)} IS NOT NULL GROUP BY {_q(brand)} ORDER BY Total DESC",
             "x": "Total",
             "y": "Margin_pct",
-            "color": marca_lbl,
+            "color": brand_lbl,
             "alto": 400,
         })
 
-    tablas: list[dict] = []
+    tables: list[dict] = []
     if stock and stock_min:
-        tablas.append({
+        tables.append({
             "titulo": f"Items Below {stock_min_lbl}",
             "sub": f"Where {stock_lbl.lower()} is less than {stock_min_lbl.lower()}",
             "icono": "warning",
@@ -846,12 +846,12 @@ def _generar_inventory_modulos(col_map: dict[str, str], table_name: str) -> list
         "material_icon": "inventory_2",
         "breadcrumbs": "HOME  /  INVENTORY",
         "kpis": kpis,
-        "graficos": graficos,
-        "tablas": tablas,
+        "graficos": charts,
+        "tablas": tables,
     }]
 
 
-def _generar_customers_modulos(col_map: dict[str, str], table_name: str) -> list[dict]:
+def _generate_customers_modules(col_map: dict[str, str], table_name: str) -> list[dict]:
     """Generate customers module.
 
     All labels are derived from the actual physical column names.
@@ -861,9 +861,9 @@ def _generar_customers_modulos(col_map: dict[str, str], table_name: str) -> list
         table_name: DuckDB table name for all generated SQL.
     """
     seg = col_map.get("segmento")
-    activo = col_map.get("activo")
-    estado = col_map.get("estado")
-    canal = col_map.get("canal")
+    active = col_map.get("activo")
+    state = col_map.get("estado")
+    channel = col_map.get("canal")
 
     t = table_name
 
@@ -871,9 +871,9 @@ def _generar_customers_modulos(col_map: dict[str, str], table_name: str) -> list
         return col.replace("_", " ").title()
 
     seg_lbl = _lbl(seg) if seg else "Segment"
-    activo_lbl = _lbl(activo) if activo else "Status"
-    estado_lbl = _lbl(estado) if estado else "Region"
-    canal_lbl = _lbl(canal) if canal else "Channel"
+    active_lbl = _lbl(active) if active else "Status"
+    state_lbl = _lbl(state) if state else "Region"
+    channel_lbl = _lbl(channel) if channel else "Channel"
 
     kpis: list[dict] = [
         {
@@ -885,13 +885,13 @@ def _generar_customers_modulos(col_map: dict[str, str], table_name: str) -> list
             "color": "#246bfd",
         },
     ]
-    if activo:
+    if active:
         kpis.append({
             "icono": "verified_user",
-            "label": f"Active {activo_lbl}",
-            "sql": f"SELECT COUNT(*) AS v FROM {t} WHERE TRY_CAST({_q(activo)} AS BOOLEAN)",
+            "label": f"Active {active_lbl}",
+            "sql": f"SELECT COUNT(*) AS v FROM {t} WHERE TRY_CAST({_q(active)} AS BOOLEAN)",
             "formato": "int",
-            "sub_sql": f"SELECT COUNT(*) AS v FROM {t} WHERE TRY_CAST({_q(activo)} AS BOOLEAN)",
+            "sub_sql": f"SELECT COUNT(*) AS v FROM {t} WHERE TRY_CAST({_q(active)} AS BOOLEAN)",
             "sub_total_sql": f"SELECT COUNT(*) AS v FROM {t}",
             "sub_format": "percent",
             "sub_suffix": "% of total",
@@ -899,26 +899,26 @@ def _generar_customers_modulos(col_map: dict[str, str], table_name: str) -> list
         })
         kpis.append({
             "icono": "block",
-            "label": f"Inactive {activo_lbl}",
-            "sql": f"SELECT COUNT(*) AS v FROM {t} WHERE NOT TRY_CAST({_q(activo)} AS BOOLEAN)",
+            "label": f"Inactive {active_lbl}",
+            "sql": f"SELECT COUNT(*) AS v FROM {t} WHERE NOT TRY_CAST({_q(active)} AS BOOLEAN)",
             "formato": "int",
-            "sub_label": f"inactive {activo_lbl.lower()}",
+            "sub_label": f"inactive {active_lbl.lower()}",
             "color": "#f59e0b",
         })
-    if estado:
+    if state:
         kpis.append({
             "icono": "public",
-            "label": f"Unique {estado_lbl}",
-            "sql": f"SELECT COUNT(DISTINCT {_q(estado)}) AS v FROM {t}",
+            "label": f"Unique {state_lbl}",
+            "sql": f"SELECT COUNT(DISTINCT {_q(state)}) AS v FROM {t}",
             "formato": "int",
             "sub_sql": f"SELECT COUNT(*) AS v FROM {t}",
-            "sub_suffix": f" {estado_lbl.lower()} records",
+            "sub_suffix": f" {state_lbl.lower()} records",
             "color": "#8b5cf6",
         })
 
-    graficos: list[dict] = []
+    charts: list[dict] = []
     if seg:
-        graficos.append({
+        charts.append({
             "tipo": "bar_h",
             "titulo": f"Records by {seg_lbl}",
             "sub": f"Distribution across {seg_lbl.lower()}",
@@ -929,40 +929,40 @@ def _generar_customers_modulos(col_map: dict[str, str], table_name: str) -> list
             "alto": 340,
             "col_izq": 1.15,
         })
-    if activo:
-        graficos.append({
+    if active:
+        charts.append({
             "tipo": "pie",
-            "titulo": f"{activo_lbl} Distribution",
-            "sub": f"Active vs inactive {activo_lbl.lower()}",
+            "titulo": f"{active_lbl} Distribution",
+            "sub": f"Active vs inactive {active_lbl.lower()}",
             "icono": "toggle_on",
-            "sql": f"SELECT (TRY_CAST({_q(activo)} AS BOOLEAN)) AS Status, COUNT(*) AS Count FROM {t} GROUP BY Status",
+            "sql": f"SELECT (TRY_CAST({_q(active)} AS BOOLEAN)) AS Status, COUNT(*) AS Count FROM {t} GROUP BY Status",
             "columna": "Status",
             "valores": "Count",
             "alto": 340,
             "col_izq": 1,
         })
-    if seg and canal:
-        graficos.append({
+    if seg and channel:
+        charts.append({
             "tipo": "bar_grouped",
-            "titulo": f"{canal_lbl} by {seg_lbl}",
-            "sub": f"{canal_lbl.lower()} crossed with {seg_lbl.lower()}",
+            "titulo": f"{channel_lbl} by {seg_lbl}",
+            "sub": f"{channel_lbl.lower()} crossed with {seg_lbl.lower()}",
             "icono": "call_split",
-            "sql": f"SELECT {_q(seg)} AS {seg_lbl}, {_q(canal)} AS {canal_lbl}, COUNT(*) AS Count FROM {t} WHERE {_q(seg)} IS NOT NULL AND {_q(canal)} IS NOT NULL GROUP BY {_q(seg)}, {_q(canal)}",
-            "x": canal_lbl,
+            "sql": f"SELECT {_q(seg)} AS {seg_lbl}, {_q(channel)} AS {channel_lbl}, COUNT(*) AS Count FROM {t} WHERE {_q(seg)} IS NOT NULL AND {_q(channel)} IS NOT NULL GROUP BY {_q(seg)}, {_q(channel)}",
+            "x": channel_lbl,
             "y": "Count",
             "color": seg_lbl,
             "alto": 380,
         })
-    if estado and canal:
-        graficos.append({
+    if state and channel:
+        charts.append({
             "tipo": "bar_stacked",
-            "titulo": f"{estado_lbl} by {canal_lbl}",
-            "sub": f"Records per {estado_lbl.lower()} by {canal_lbl.lower()}",
+            "titulo": f"{state_lbl} by {channel_lbl}",
+            "sub": f"Records per {state_lbl.lower()} by {channel_lbl.lower()}",
             "icono": "public",
-            "sql": f"SELECT {_q(estado)} AS {estado_lbl}, {_q(canal)} AS {canal_lbl}, COUNT(*) AS Count FROM {t} WHERE {_q(estado)} IS NOT NULL AND {_q(canal)} IS NOT NULL GROUP BY {_q(estado)}, {_q(canal)}",
-            "x": estado_lbl,
+            "sql": f"SELECT {_q(state)} AS {state_lbl}, {_q(channel)} AS {channel_lbl}, COUNT(*) AS Count FROM {t} WHERE {_q(state)} IS NOT NULL AND {_q(channel)} IS NOT NULL GROUP BY {_q(state)}, {_q(channel)}",
+            "x": state_lbl,
             "y": "Count",
-            "color": canal_lbl,
+            "color": channel_lbl,
             "alto": 380,
             "top_n": 8,
         })
@@ -971,15 +971,15 @@ def _generar_customers_modulos(col_map: dict[str, str], table_name: str) -> list
         "id": "contacts",
         "nombre": "Contacts",
         "icono": "\U0001f465",
-        "descripcion": f"Records segmentation by {', '.join(lbl for lbl in [seg_lbl, estado_lbl, canal_lbl] if lbl not in ('Segment', 'Region', 'Channel')) or 'available columns'}.",
+        "descripcion": f"Records segmentation by {', '.join(lbl for lbl in [seg_lbl, state_lbl, channel_lbl] if lbl not in ('Segment', 'Region', 'Channel')) or 'available columns'}.",
         "material_icon": "groups",
         "breadcrumbs": "HOME  /  CONTACTS",
         "kpis": kpis,
-        "graficos": graficos,
+        "graficos": charts,
     }]
 
 
-def generar_y_guardar(df_head: pd.DataFrame, output_path: str | None = None, table_name: str = "data") -> str:
+def generate_and_save(df_head: pd.DataFrame, output_path: str | None = None, table_name: str = "data") -> str:
     """Generate config from *df_head* and write to ``ui_config.json``.
 
     Args:
@@ -990,7 +990,7 @@ def generar_y_guardar(df_head: pd.DataFrame, output_path: str | None = None, tab
     Returns:
         The absolute path of the written file.
     """
-    config = generar_ui_config(df_head, table_name=table_name)
+    config = generate_ui_config(df_head, table_name=table_name)
     path = Path(output_path) if output_path else BASE_DIR / "ui_config.json"
     path.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
     return str(path.resolve())
@@ -1008,7 +1008,7 @@ if __name__ == "__main__":
         "shift": (["Morning", "Afternoon"] * 25)[:n],
         "cashier": (["Alice", "Bob", "Charlie"] * 20)[:n],
     })
-    cfg = generar_ui_config(dummy, table_name="demo_data")
+    cfg = generate_ui_config(dummy, table_name="demo_data")
     out = BASE_DIR / "ui_config_test.json"
     out.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Config written to {out}")

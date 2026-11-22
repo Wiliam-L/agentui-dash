@@ -18,6 +18,7 @@ synonyms, table types, or what data to ingest. It only provides:
 """
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import logging
@@ -70,8 +71,11 @@ if not _logger.handlers:
 # This ensures the file lock is released between operations, allowing the other
 # process to access the database.
 #
-# The _con singleton is kept only for ingestir_tabla() which needs a persistent
+# The _con singleton is kept only for ingest_table() which needs a persistent
 # connection for the duration of a multi-file upload session.
+
+
+_con: duckdb.DuckDBPyConnection | None = None
 
 
 def _open_con(read_only: bool = False) -> duckdb.DuckDBPyConnection:
@@ -91,15 +95,12 @@ def _open_con(read_only: bool = False) -> duckdb.DuckDBPyConnection:
     return duckdb.connect(str(DB_PATH))
 
 
-_con: duckdb.DuckDBPyConnection | None = None
-
-
 def get_con() -> duckdb.DuckDBPyConnection:
     """Open (or create) the shared DuckDB database connection.
 
     Returns a persistent singleton connection. Use this only for operations
     that need a long-lived connection (e.g., multi-step ingestion).
-    For simple queries, prefer ejecutar() which uses ephemeral connections.
+    For simple queries, prefer run_query() which uses ephemeral connections.
     """
     global _con
     if _con is None:
@@ -141,42 +142,42 @@ def close_con() -> None:
 _MAX_SQL_LEN = 50_000
 
 # Statement types that are safe to execute from a dashboard.
-_RAICES_PERMITIDAS = tuple(
-    getattr(exp, nombre)
-    for nombre in ("Select", "Union", "Intersect", "Except", "Subquery",
-                   "Describe", "Show", "Values")
-    if hasattr(exp, nombre)
+_ALLOWED_ROOTS = tuple(
+    getattr(exp, name)
+    for name in ("Select", "Union", "Intersect", "Except", "Subquery",
+                 "Describe", "Show", "Values")
+    if hasattr(exp, name)
 )
 
 # Anything that writes, attaches, installs extensions or runs OS commands.
-_NODOS_PROHIBIDOS = tuple(
-    getattr(exp, nombre)
-    for nombre in ("Insert", "Update", "Delete", "Drop", "Create", "Alter",
-                   "Attach", "Detach", "Copy", "Pragma", "Install", "Load",
-                   "Command", "Use", "Set", "Transaction", "Merge", "Grant",
-                   "Export", "Import", "Refresh", "Cache", "Uncache")
-    if hasattr(exp, nombre)
+_FORBIDDEN_NODES = tuple(
+    getattr(exp, name)
+    for name in ("Insert", "Update", "Delete", "Drop", "Create", "Alter",
+                 "Attach", "Detach", "Copy", "Pragma", "Install", "Load",
+                 "Command", "Use", "Set", "Transaction", "Merge", "Grant",
+                 "Export", "Import", "Refresh", "Cache", "Uncache")
+    if hasattr(exp, name)
 )
 
 # Table functions that touch the filesystem or the network.
-_FUNCIONES_PROHIBIDAS = {
+_FORBIDDEN_FUNCTIONS = {
     "glob", "query", "query_table", "sniff_csv", "getvariable", "getenv",
     "sqlite_attach", "sqlite_scan", "postgres_scan", "mysql_scan",
     "iceberg_scan", "delta_scan", "which_secret", "read_xlsx",
 }
 
 
-def _nombre_funcion(nodo: exp.Func) -> str:
+def _func_name(node: exp.Func) -> str:
     """Best-effort lowercase name of a function node (Anonymous uses ``name``)."""
-    if isinstance(nodo, exp.Anonymous):
-        return str(nodo.name or "").lower()
-    return str(nodo.sql_name() or "").lower()
+    if isinstance(node, exp.Anonymous):
+        return str(node.name or "").lower()
+    return str(node.sql_name() or "").lower()
 
 
-def safe_sql(sql: str, tablas: set[str] | None = None) -> str | None:
+def safe_sql(sql: str, tables: set[str] | None = None) -> str | None:
     """Validate *sql* before running it.
 
-    Returns ``None`` when the query is safe, or a short reason (in Spanish,
+    Returns ``None`` when the query is safe, or a short reason (in English,
     ready to show in the UI) when it is not.
 
     This is a defence-in-depth check, not a full SQL sandbox: it blocks
@@ -187,86 +188,86 @@ def safe_sql(sql: str, tablas: set[str] | None = None) -> str | None:
 
     Args:
         sql: Query to validate.
-        tablas: Tables allowed in this query. Defaults to the tables present in
+        tables: Tables allowed in this query. Defaults to the tables present in
             the database; pass an explicit set in tests.
     """
     if not isinstance(sql, str) or not sql.strip():
-        return "La consulta está vacía."
+        return "The query is empty."
 
     if len(sql) > _MAX_SQL_LEN:
-        return "La consulta es demasiado larga."
+        return "The query is too long."
 
     try:
         statements = sqlglot.parse(sql, read="duckdb")
     except SqlglotError as exc:
-        return f"SQL no válido: {str(exc).splitlines()[0][:160]}"
+        return f"Invalid SQL: {str(exc).splitlines()[0][:160]}"
 
     statements = [s for s in statements if s is not None]
     if not statements:
-        return "La consulta está vacía."
+        return "The query is empty."
     if len(statements) > 1:
-        return "Solo se permite una sentencia SQL por consulta."
+        return "Only one SQL statement per query is allowed."
 
     tree = statements[0]
 
-    if not isinstance(tree, _RAICES_PERMITIDAS):
-        return f"Solo se permiten consultas de lectura (SELECT). Tipo detectado: {type(tree).__name__}."
+    if not isinstance(tree, _ALLOWED_ROOTS):
+        return f"Read-only queries (SELECT) only. Detected type: {type(tree).__name__}."
 
-    for nodo in tree.walk():
-        if isinstance(nodo, _NODOS_PROHIBIDOS):
-            return f"Operación no permitida: {type(nodo).__name__.upper()}."
+    for node in tree.walk():
+        if isinstance(node, _FORBIDDEN_NODES):
+            return f"Operation not allowed: {type(node).__name__.upper()}."
 
-    for nodo in tree.find_all(exp.Func):
-        nombre = _nombre_funcion(nodo)
-        if nombre.startswith("read_") or nombre.endswith("_scan") or nombre in _FUNCIONES_PROHIBIDAS:
-            return f"Función no permitida: {nombre}() (acceso a archivos o red)."
+    for node in tree.find_all(exp.Func):
+        name = _func_name(node)
+        if name.startswith("read_") or name.endswith("_scan") or name in _FORBIDDEN_FUNCTIONS:
+            return f"Function not allowed: {name}() (file or network access)."
 
     # Tables must exist in the database (CTE aliases are fine).
     alias_cte = {str(cte.alias).lower() for cte in tree.find_all(exp.CTE)}
-    referenciadas: set[str] = set()
-    for tabla in tree.find_all(exp.Table):
-        if isinstance(tabla.this, exp.Func):
+    referenced: set[str] = set()
+    for tbl in tree.find_all(exp.Table):
+        if isinstance(tbl.this, exp.Func):
             # Already covered by the function check above.
             continue
-        if tabla.catalog:
-            return f"Acceso a catálogo no permitido: {tabla.catalog}."
-        if tabla.db and str(tabla.db).lower() != "main":
-            return f"Acceso a esquema no permitido: {tabla.db}."
-        nombre = str(tabla.name or "")
-        if nombre and nombre.lower() not in alias_cte:
-            referenciadas.add(nombre)
+        if tbl.catalog:
+            return f"Catalog access not allowed: {tbl.catalog}."
+        if tbl.db and str(tbl.db).lower() != "main":
+            return f"Schema access not allowed: {tbl.db}."
+        name = str(tbl.name or "")
+        if name and name.lower() not in alias_cte:
+            referenced.add(name)
 
-    if referenciadas:
-        disponibles = {t.lower() for t in tablas} if tablas is not None else None
-        if disponibles is None:
+    if referenced:
+        available = {t.lower() for t in tables} if tables is not None else None
+        if available is None:
             try:
-                disponibles = {t.lower() for t in tablas_disponibles()}
+                available = {t.lower() for t in available_tables()}
             except Exception:
-                disponibles = set()
-        if disponibles:
-            no_encontradas = referenciadas - disponibles
-            if no_encontradas:
+                available = set()
+        if available:
+            not_found = referenced - available
+            if not_found:
                 return (
-                    "La consulta usa tablas que no existen: "
-                    + ", ".join(sorted(no_encontradas))
-                    + ". Disponibles: "
-                    + ", ".join(sorted(disponibles))
+                    "The query uses tables that do not exist: "
+                    + ", ".join(sorted(not_found))
+                    + ". Available: "
+                    + ", ".join(sorted(available))
                     + "."
                 )
 
     return None
 
 
-_ULTIMO_ERROR: str | None = None
-_ERROR_SEQ = 0
+_LAST_ERROR: str | None = None
+_ERROR_COUNT = 0
 
 
-def error_seq() -> int:
+def error_count() -> int:
     """Number of failed queries so far (cheap way to detect new failures)."""
-    return _ERROR_SEQ
+    return _ERROR_COUNT
 
 
-def ejecutar(
+def run_query(
     sql: str,
     params: dict[str, Any] | None = None,
 ) -> pd.DataFrame:
@@ -276,7 +277,7 @@ def ejecutar(
     immediately. This avoids holding a file lock that would block the
     other process (MCP or Streamlit) from accessing the database.
 
-    Failures are logged instead of swallowed silently; ``ultimo_error()``
+    Failures are logged instead of swallowed silently; ``last_error()``
     exposes the last message so the UI can surface it.
 
     Execution time is logged for performance monitoring.
@@ -285,18 +286,18 @@ def ejecutar(
         sql: SQL query string.
         params: Optional named parameters.
     """
-    global _ULTIMO_ERROR, _ERROR_SEQ
+    global _LAST_ERROR, _ERROR_COUNT
 
     if not DB_PATH.exists():
         return pd.DataFrame()
 
-    motivo = safe_sql(sql)
-    if motivo is not None:
-        _ULTIMO_ERROR = f"SQL bloqueado: {motivo}"
-        _ERROR_SEQ += 1
+    reason = safe_sql(sql)
+    if reason is not None:
+        _LAST_ERROR = f"SQL blocked: {reason}"
+        _ERROR_COUNT += 1
         _logger.warning(
             "Query blocked: %s | SQL: %s",
-            motivo,
+            reason,
             " ".join(str(sql).split())[:300],
         )
         return pd.DataFrame()
@@ -312,10 +313,11 @@ def ejecutar(
         return df
     except Exception as exc:
         elapsed = time.time() - start
-        _ULTIMO_ERROR = f"{type(exc).__name__}: {exc}"
-        _ERROR_SEQ += 1
+        _LAST_ERROR = f"{type(exc).__name__}: {exc}"
+        _ERROR_COUNT += 1
         _logger.error(
-            "Query failed after {elapsed:.3f}s: %s | SQL: %s",
+            "Query failed after %.3fs: %s | SQL: %s",
+            elapsed,
             exc,
             " ".join(str(sql).split())[:300],
         )
@@ -327,9 +329,9 @@ def ejecutar(
             pass
 
 
-def ultimo_error() -> str | None:
-    """Last SQL error captured by :func:`ejecutar` (kept until the next failure)."""
-    return _ULTIMO_ERROR
+def last_error() -> str | None:
+    """Last SQL error captured by :func:`run_query` (kept until the next failure)."""
+    return _LAST_ERROR
 
 # --------------------------------------------------------------------------- #
 # Storage helpers
@@ -339,11 +341,11 @@ def _manifest() -> dict:
     if not mf.exists():
         return {}
     try:
-        datos = json.loads(mf.read_text(encoding="utf-8"))
+        data = json.loads(mf.read_text(encoding="utf-8"))
     except Exception:
         return {}
     norm: dict = {}
-    for k, v in datos.items():
+    for k, v in data.items():
         if isinstance(v, str):
             norm[k] = {"nombre": v, "hash": ""}
         else:
@@ -351,26 +353,39 @@ def _manifest() -> dict:
     return norm
 
 
-def _guardar_manifest(nombres: dict) -> None:
+def _save_manifest(names: dict) -> None:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    (UPLOAD_DIR / _MANIFEST).write_text(json.dumps(nombres, indent=2), encoding="utf-8")
+    (UPLOAD_DIR / _MANIFEST).write_text(json.dumps(names, indent=2), encoding="utf-8")
 
 
-def _existe_tabla(con: duckdb.DuckDBPyConnection, tabla: str) -> bool:
+def _is_valid_identifier(name: str) -> bool:
+    """Check if *name* is a safe SQL identifier (letters, digits, underscore).
+
+    Rejects empty strings and names containing special characters that could
+    enable SQL injection via identifier interpolation.
+    """
+    if not name:
+        return False
+    return all(c.isalnum() or c == "_" for c in name)
+
+
+def _table_exists(con: duckdb.DuckDBPyConnection, table: str) -> bool:
+    if not _is_valid_identifier(table):
+        return False
     try:
-        con.execute(f"SELECT 1 FROM {tabla} LIMIT 1").fetchall()
+        con.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchall()
         return True
     except Exception:
         return False
 
 
-def tabla_existe(tabla: str) -> bool:
+def table_exists(table: str) -> bool:
     """Check if a table exists in the DuckDB database using an ephemeral connection."""
     if not DB_PATH.exists():
         return False
     con = _open_con(read_only=True)
     try:
-        return _existe_tabla(con, tabla)
+        return _table_exists(con, table)
     except Exception:
         return False
     finally:
@@ -380,7 +395,7 @@ def tabla_existe(tabla: str) -> bool:
             pass
 
 
-def tablas_disponibles() -> list[str]:
+def available_tables() -> list[str]:
     """Return a list of all table names in the DuckDB database using an ephemeral connection."""
     if not DB_PATH.exists():
         return []
@@ -399,103 +414,105 @@ def tablas_disponibles() -> list[str]:
             pass
 
 
-def hay_datos() -> bool:
+def has_data() -> bool:
     """Check if any data has been loaded into the database."""
-    return len(tablas_disponibles()) > 0
+    return len(available_tables()) > 0
 
 
-def archivo_en_uso(tipo: str) -> str:
-    """Return the filename currently loaded for a given table type key."""
-    info = _manifest().get(tipo)
+def file_in_use(key: str) -> str:
+    """Return the filename currently loaded for a given table key."""
+    info = _manifest().get(key)
     if isinstance(info, str):
         return info
-    return (info or {}).get("nombre", f"{tipo}.csv")
+    return (info or {}).get("nombre", f"{key}.csv")
 
 
 # --------------------------------------------------------------------------- #
 # Upload / ingest — generic, no hardcoded types
 # --------------------------------------------------------------------------- #
-def ingestir_tabla(tabla: str, files) -> list[str]:
+def ingest_table(table: str, files) -> list[str]:
     """Ingest uploaded files into a DuckDB table whose name is provided by the caller.
     
     This is the generic ingestion function. The MCP agent (or any caller) decides
     what table name to use. This module just stores the data.
     
     Args:
-        tabla: Target table name in DuckDB (e.g. "sales", "my_data", etc.).
+        table: Target table name in DuckDB (e.g. "sales", "my_data", etc.).
         files: List of file-like objects (CSV or Excel).
     
     Returns:
         List of status messages for each file processed.
     """
     con = get_con()
-    mensajes = []
-    nombres = _manifest()
+    messages = []
+    names = _manifest()
     
     for f in (files or []):
-        nombre = _nombre_archivo(f)
+        fname = _file_name(f)
         try:
-            raw = _leer_cabecera(f)
+            raw = _read_header(f)
         except Exception as e:
-            msg = f"Error reading '{nombre}': {e}"
+            msg = f"Error reading '{fname}': {e}"
             _logger.warning(msg)
-            mensajes.append(msg)
+            messages.append(msg)
             continue
         
-        fhash = _hash_archivo(f)
-        previo = nombres.get(tabla)
-        prev_hash = (previo or {}).get("hash", "") if isinstance(previo, dict) else ""
+        fhash = _file_hash(f)
+        prev = names.get(table)
+        prev_hash = (prev or {}).get("hash", "") if isinstance(prev, dict) else ""
         if prev_hash and prev_hash == fhash:
-            msg = f"'{nombre}' already loaded (skipped)"
+            msg = f"'{fname}' already loaded (skipped)"
             _logger.info(msg)
-            mensajes.append(msg)
+            messages.append(msg)
             continue
         
-        es_xlsx = _es_excel(f)
-        sufijo = ".parquet" if es_xlsx else _CSV_EXT
-        ruta_disco = UPLOAD_DIR / f"__ingest_{tabla}_{uuid.uuid4().hex[:12]}{sufijo}"
+        is_xlsx = _is_excel(f)
+        suffix = ".parquet" if is_xlsx else _CSV_EXT
+        disk_path = UPLOAD_DIR / f"__ingest_{table}_{uuid.uuid4().hex[:12]}{suffix}"
         try:
-            if es_xlsx:
+            if is_xlsx:
                 df = pd.read_excel(io.BytesIO(f.getvalue()), engine="calamine")
-                df = _normalizar_fechas(df)
+                df = _normalize_dates(df)
                 con.register("__tmp_upload", df)
                 try:
-                    _crear_tabla(con, tabla, "__tmp_upload")
+                    _create_table(con, table, "__tmp_upload")
                 finally:
                     try:
                         con.unregister("__tmp_upload")
                     except Exception:
                         pass
             else:
-                _volcar_a_csv(f, ruta_disco)
-                _crear_tabla(con, tabla, _sani(ruta_disco))
-            nombres[tabla] = {"nombre": nombre, "hash": fhash}
-            msg = f"'{nombre}' ingested into table '{tabla}' ({len(raw)} rows)"
+                _dump_to_csv(f, disk_path)
+                _create_table(con, table, _sani(disk_path))
+            names[table] = {"nombre": fname, "hash": fhash}
+            msg = f"'{fname}' ingested into table '{table}' ({len(raw)} rows)"
             _logger.info(msg)
-            mensajes.append(msg)
+            messages.append(msg)
         except Exception as e:
-            msg = f"Error ingesting '{nombre}' into '{tabla}': {e}"
+            msg = f"Error ingesting '{fname}' into '{table}': {e}"
             _logger.error(msg)
-            mensajes.append(msg)
+            messages.append(msg)
         finally:
-            if ruta_disco.exists():
+            if disk_path.exists():
                 try:
-                    ruta_disco.unlink()
+                    disk_path.unlink()
                 except Exception:
                     pass
     
-    if nombres:
-        _guardar_manifest(nombres)
+    if names:
+        _save_manifest(names)
     # Release the DuckDB file lock: the UI only reads, and the MCP server needs
     # to write. Keeping the writer open here caused "file is being used by
     # another process" on Windows.
     close_con()
-    return mensajes
+    return messages
 
 
-def _crear_tabla(con: duckdb.DuckDBPyConnection, tabla: str, fuente_sql: str) -> None:
+def _create_table(con: duckdb.DuckDBPyConnection, table: str, source_sql: str) -> None:
     """Create or replace a table from a SQL source expression."""
-    sql = f"CREATE OR REPLACE TABLE {tabla} AS SELECT * FROM {fuente_sql}"
+    if not _is_valid_identifier(table):
+        raise ValueError(f"Invalid table name: {table!r}")
+    sql = f"CREATE OR REPLACE TABLE {table} AS SELECT * FROM {source_sql}"
     con.execute(sql)
     con.commit()
     # Force checkpoint so other processes (e.g., Streamlit read-only) can see the data.
@@ -503,65 +520,64 @@ def _crear_tabla(con: duckdb.DuckDBPyConnection, tabla: str, fuente_sql: str) ->
         con.execute("CHECKPOINT")
     except Exception:
         pass
-    _logger.info("Table '%s' created from %s", tabla, fuente_sql[:80])
+    _logger.info("Table '%s' created from %s", table, source_sql[:80])
 
 
-def guardar_archivos(files, tabla: str = "default") -> list[str]:
-    """Legacy alias for ingestir_tabla. Kept for backward compatibility.
+def save_files(files, table: str = "default") -> list[str]:
+    """Legacy alias for ingest_table. Kept for backward compatibility.
     
     Args:
         files: List of file-like objects.
-        tabla: Target table name (default: "default").
+        table: Target table name (default: "default").
     
     Returns:
         List of status messages.
     """
-    return ingestir_tabla(tabla, files)
+    return ingest_table(table, files)
 
 
 # --------------------------------------------------------------------------- #
 # Private helpers
 # --------------------------------------------------------------------------- #
-def _nombre_archivo(f) -> str:
+def _file_name(f) -> str:
     return getattr(f, "name", None) or "dataset.csv"
 
 
 def _extension(f) -> str:
-    nombre = _nombre_archivo(f).lower()
-    return nombre.rsplit(".", 1)[-1] if "." in nombre else ""
+    fname = _file_name(f).lower()
+    return fname.rsplit(".", 1)[-1] if "." in fname else ""
 
 
-def _es_excel(f) -> bool:
+def _is_excel(f) -> bool:
     return _extension(f) in {"xlsx", "xls"}
 
 
-def _leer_cabecera(f, nrows: int = 200) -> pd.DataFrame:
+def _read_header(f, nrows: int = 200) -> pd.DataFrame:
     buf = io.BytesIO(f.getvalue())
-    if _es_excel(f):
+    if _is_excel(f):
         return pd.read_excel(buf, nrows=nrows, engine="openpyxl")
     return pd.read_csv(buf, nrows=nrows)
 
 
-def _volcar_a_csv(f, ruta) -> None:
-    with open(ruta, "wb") as fh:
+def _dump_to_csv(f, path) -> None:
+    with open(path, "wb") as fh:
         fh.write(f.getvalue())
 
 
-def _hash_archivo(f) -> str:
-    import hashlib
+def _file_hash(f) -> str:
     try:
         return hashlib.sha256(f.getvalue()).hexdigest()[:16]
     except Exception:
         return ""
 
 
-_ALIASES_FECHA = ("date", "fecha", "dia", "timestamp", "datetime", "nacimiento", "birth")
+_DATE_ALIASES = ("date", "fecha", "dia", "timestamp", "datetime", "nacimiento", "birth")
 
 
-def _normalizar_fechas(df: pd.DataFrame) -> pd.DataFrame:
+def _normalize_dates(df: pd.DataFrame) -> pd.DataFrame:
     for c in df.columns:
         base = str(c).lower()
-        if not any(a in base for a in _ALIASES_FECHA):
+        if not any(a in base for a in _DATE_ALIASES):
             continue
         if df[c].dtype == object or pd.api.types.is_string_dtype(df[c]):
             try:
@@ -571,13 +587,13 @@ def _normalizar_fechas(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _sani(ruta) -> str:
+def _sani(path) -> str:
     """Sanitize a file path for use in DuckDB SQL — wraps in quotes so spaces work."""
-    path_str = str(ruta).replace("\\", "/")
+    path_str = str(path).replace("\\", "/")
     return f"'{path_str}'"
 
 
-def limpiar_datos() -> None:
+def clear_data() -> None:
     global _con
     try:
         if _con is not None:
@@ -597,4 +613,54 @@ def limpiar_datos() -> None:
                     f.unlink()
                 except Exception:
                     pass
-        _guardar_manifest({})
+        _save_manifest({})
+
+
+# --------------------------------------------------------------------------- #
+# Column inspection helpers (public)
+# --------------------------------------------------------------------------- #
+
+def get_table_columns(table: str) -> list[str]:
+    """Return the column names of an existing DuckDB table.
+
+    Args:
+        table: Table name in DuckDB.
+
+    Returns:
+        List of column names, or empty list if the table does not exist.
+    """
+    if not table_exists(table):
+        return []
+    con = _open_con(read_only=True)
+    try:
+        df = con.execute(f"DESCRIBE {table}").df()
+        if df.empty:
+            return []
+        return [str(r) for r in df["column_name"]]
+    except Exception:
+        return []
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+
+
+def read_file_columns(f) -> list[str]:
+    """Read only the header row of a CSV or Excel file and return column names.
+
+    Args:
+        f: File-like object with a .name attribute and .getvalue() method.
+
+    Returns:
+        List of column names from the file header.
+    """
+    try:
+        data = f.getvalue()
+        if _is_excel(f):
+            df = pd.read_excel(io.BytesIO(data), nrows=0, engine="calamine")
+        else:
+            df = pd.read_csv(io.BytesIO(data), nrows=0)
+        return list(df.columns)
+    except Exception:
+        return []

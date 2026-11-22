@@ -8,11 +8,21 @@ services:
       - ./app_base:/app/app_base
     environment:
       - AGENTUI_HOST=0.0.0.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
 
   mcp:
     build: .
-    command: ["python", "-m", "agentui_mcp.server"]
+    command: ["agentui-mcp"]
     volumes:
       - ./app_base:/app/app_base
+    environment:
+      - AGENTUI_HOST=0.0.0.0
+    restart: unless-stopped
     stdin_open: true
     tty: true

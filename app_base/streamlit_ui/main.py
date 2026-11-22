@@ -4,6 +4,10 @@ Reads ``ui_config.json`` for everything: modules, KPIs, charts, filters, SQL.
 No hardcoded views, no hardcoded queries, no hardcoded column names.
 The future MCP server will write this JSON; the UI just renders it.
 """
+import io
+import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -17,19 +21,18 @@ for _p in (str(_REPO_ROOT), str(_PROJECT_ROOT)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import json
-
+import pandas as pd
 import streamlit as st
 
 from core.data import (
-    archivo_en_uso,
-    guardar_archivos,
-    hay_datos,
-    limpiar_datos,
-    tablas_disponibles,
+    available_tables,
+    file_in_use,
+    has_data,
+    ingest_table,
 )
-from core.tools import obtener_opciones_filtro, obtener_rango_fechas
+from core.tools import get_filter_options, get_date_range
 from streamlit_ui import styles
+from streamlit_ui.views.dynamic import render as render_modulo
 
 # --------------------------------------------------------------------------- #
 # Config loader
@@ -60,7 +63,7 @@ def _config_mtime() -> float:
         return 0.0
 
 
-def cargar_config() -> dict:
+def load_config() -> dict:
     """Load ui_config.json on every run so MCP edits show up immediately.
 
     No caching: the file is ~15 KB, so re-reading it costs less than the
@@ -75,40 +78,35 @@ def cargar_config() -> dict:
         st.session_state[_LAST_GOOD_KEY] = config
         return config
     except Exception as exc:
-        ultimo = st.session_state.get(_LAST_GOOD_KEY)
-        if ultimo is not None:
-            return ultimo
+        last_good = st.session_state.get(_LAST_GOOD_KEY)
+        if last_good is not None:
+            return last_good
         if CONFIG_PATH.exists():
             print(f"[ui_config] cannot parse {CONFIG_PATH}: {exc}")
         return DEFAULT_CONFIG
 
 
 @st.fragment(run_every=2.0)
-def _vigilar_config() -> None:
+def _watch_config() -> None:
     """Cheap watcher: rerun the app only when ui_config.json actually changed.
 
     This replaces the old 3 s full ``st_autorefresh``, which re-executed every
     KPI, chart and table against DuckDB even when nothing had changed.
     """
     actual = _config_mtime()
-    previo = st.session_state.get(_CONFIG_MTIME_KEY)
-    if previo is None:
+    prev_mtime = st.session_state.get(_CONFIG_MTIME_KEY)
+    if prev_mtime is None:
         st.session_state[_CONFIG_MTIME_KEY] = actual
         return
-    if actual != previo:
+    if actual != prev_mtime:
         st.session_state[_CONFIG_MTIME_KEY] = actual
         st.rerun(scope="app")
 
 
 # --------------------------------------------------------------------------- #
-# Dynamic view renderer (replaces hardcoded VIEWS dict)
-# --------------------------------------------------------------------------- #
-from streamlit_ui.views.dynamic import render as render_modulo  # noqa: E402
-
-# --------------------------------------------------------------------------- #
 # Sidebar helpers
 # --------------------------------------------------------------------------- #
-def _marca(config: dict) -> None:
+def _brand(config: dict) -> None:
     brand_name = config.get("brand_name", "Dashboard")
     brand_sub = config.get("brand_sub", "")
     brand_icon = config.get("brand_icon", "storefront")
@@ -127,7 +125,7 @@ def _marca(config: dict) -> None:
     )
 
 
-def _navegacion(config: dict) -> str:
+def _navigation(config: dict) -> str:
     """Dynamically build sidebar navigation from config['modulos']."""
     st.markdown('<div class="side-label">Modules</div>', unsafe_allow_html=True)
     modulos = config.get("modulos", [])
@@ -142,33 +140,124 @@ def _navegacion(config: dict) -> str:
     return modulos[idx]["id"] if modulos else "dashboard"
 
 
-def _procesar_archivos() -> None:
-    archivos = st.session_state.get("data_files")
-    if archivos:
-        guardar_archivos(archivos)
+def _get_expected_columns(config: dict, table: str) -> list[str]:
+    """Extract expected column names for a table from column_mapping.
+
+    The column_mapping uses keys like ``sales_sucursal``, ``sales_fecha``, etc.
+    The values are the physical CSV/Excel header names. This function returns
+    the sorted list of unique physical column names for the given table prefix.
+    """
+    col_map = config.get("column_mapping", {})
+    prefix = table + "_"
+    cols = [
+        col for role, col in col_map.items()
+        if role.startswith(prefix)
+    ]
+    # Deduplicate while preserving order
+    seen = set()
+    result = []
+    for c in cols:
+        if c not in seen:
+            seen.add(c)
+            result.append(c)
+    return result
 
 
-def _datos(config: dict) -> None:
+def _read_file_columns(file) -> list[str]:
+    """Read the header row of an uploaded CSV or Excel file and return column names."""
+    try:
+        data = file.getvalue()
+        if file.name.endswith(".xlsx"):
+            df = pd.read_excel(io.BytesIO(data), engine="calamine", nrows=0)
+        else:
+            df = pd.read_csv(io.BytesIO(data), nrows=0)
+        return list(df.columns)
+    except Exception:
+        return []
+
+
+def _process_data_update() -> None:
+    """Handle the data update file upload: validate columns and replace data."""
+    files = st.session_state.get("update_files")
+    table = st.session_state.get("update_table")
+    if not files or not table:
+        return
+
+    config = load_config()
+    expected = _get_expected_columns(config, table)
+    if not expected:
+        # Fallback: no column_mapping for this table — accept any file
+        expected = None
+
+    uploaded = files[0]  # Take the first file
+    actual = _read_file_columns(uploaded)
+
+    if expected and actual:
+        expected_set = set(expected)
+        actual_set = set(actual)
+        missing = expected_set - actual_set
+        extra = actual_set - expected_set
+
+        if missing:
+            st.error(
+                f"Column mismatch — missing: {', '.join(sorted(missing))}. "
+                f"Please use a file with the original column names."
+            )
+            return
+        if extra:
+            st.warning(
+                f"Extra columns found: {', '.join(sorted(extra))}. "
+                f"Only the expected columns will be used."
+            )
+
+    # Replace the data
+    try:
+        messages = ingest_table(table, [uploaded])
+        for msg in messages:
+            st.success(msg)
+        st.rerun()
+    except Exception as e:
+        st.error(f"Failed to update data: {e}")
+
+
+def _data_source(config: dict) -> None:
     st.markdown('<div class="side-label">Data Source</div>', unsafe_allow_html=True)
 
-    st.file_uploader(
-        "Upload CSV / Excel files",
-        type=["csv", "xlsx"],
-        accept_multiple_files=True,
-        key="data_files",
-        on_change=_procesar_archivos,
-        help="Drop your data files (CSV or Excel XLSX). The app will auto-detect the type.",
-        disabled=False,
-    )
+    # Data update — only for refreshing previously loaded data, NOT for creating dashboards
+    if has_data():
+        tables = available_tables()
+        if tables:
+            st.markdown(
+                '<p style="font-size:0.75rem; color:var(--body); opacity:0.6; margin:0 0 0.5rem 0;">'
+                "Refresh data from previously loaded files only. "
+                "This does not create a new dashboard."
+                '</p>',
+                unsafe_allow_html=True,
+            )
+            update_table = st.selectbox(
+                "Table to update",
+                tables,
+                key="update_table",
+                help="Select which table's data you want to refresh with a new file.",
+            )
+            st.file_uploader(
+                "Refresh data",
+                type=["csv", "xlsx"],
+                accept_multiple_files=False,
+                key="update_files",
+                on_change=_process_data_update,
+                help="Upload a CSV or Excel with the same columns to update this table's data.",
+            )
+            st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
 
     # Show all available tables dynamically
-    if hay_datos():
-        tables = tablas_disponibles()
+    if has_data():
+        tables = available_tables()
         if tables:
             files_lines = ""
             for t in sorted(tables):
                 label = t.capitalize()
-                file_name = archivo_en_uso(t)
+                file_name = file_in_use(t)
                 files_lines += f"{label}: <b>{file_name}</b><br>"
         else:
             files_lines = "No tables found."
@@ -190,62 +279,53 @@ def _datos(config: dict) -> None:
     
     st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
 
-    if hay_datos() and st.button(
-        "Clear all data", width="stretch", icon=":material/delete:",
-        disabled=False
-    ):
-        limpiar_datos()
-        st.rerun()
 
-    st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
-
-
-def _filtros_globales(config: dict) -> dict:
+def _global_filters(config: dict) -> dict:
     """Render global filters dynamically from JSON config."""
     st.markdown('<div class="side-label">Global Filters</div>', unsafe_allow_html=True)
 
-    filtros_config = config.get("filtros_globales", [])
-    if not filtros_config or not hay_datos():
+    filter_config = config.get("filtros_globales", [])
+    if not filter_config or not has_data():
         st.caption("Upload data to enable the global filters.")
         st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
         return {}
 
-    valores: dict = {}
-    for f_cfg in filtros_config:
+    values: dict = {}
+    for f_cfg in filter_config:
         nombre = f_cfg["nombre"]
         etiqueta = f_cfg.get("etiqueta", nombre)
         f_tipo = f_cfg.get("tipo", "select")
 
         if f_tipo == "select":
-            opciones = obtener_opciones_filtro(f_cfg)
+            options = get_filter_options(f_cfg)
             todos_label = f_cfg.get("todos_label", "All")
-            opciones_con_todo = [todos_label] + opciones
-            sel = st.selectbox(etiqueta, opciones_con_todo)
-            valores[nombre] = "All" if sel == todos_label else sel
+            options_with_all = [todos_label] + options
+            sel = st.selectbox(etiqueta, options_with_all)
+            values[nombre] = "All" if sel == todos_label else sel
 
         elif f_tipo == "date_range":
-            f_min, f_max = obtener_rango_fechas(f_cfg)
+            f_min, f_max = get_date_range(f_cfg)
             if f_min is not None and f_max is not None and f_min < f_max:
                 fecha = st.slider(etiqueta, min_value=f_min, max_value=f_max,
                                   value=(f_min, f_max), format="YYYY-MM-DD")
-                valores[nombre] = fecha
+                values[nombre] = fecha
             else:
                 # Column is not a real date (e.g. Year integer) — fall back to select
-                opciones = obtener_opciones_filtro(f_cfg)
-                if opciones:
-                    sel = st.selectbox(etiqueta, ["All"] + opciones)
-                    valores[nombre] = None if sel == "All" else sel
+                options = get_filter_options(f_cfg)
+                if options:
+                    sel = st.selectbox(etiqueta, ["All"] + options)
+                    values[nombre] = None if sel == "All" else sel
                 else:
-                    valores[nombre] = None
+                    values[nombre] = None
 
         elif f_tipo == "multiselect":
-            opciones = obtener_opciones_filtro(f_cfg)
-            sel = st.multiselect(etiqueta, opciones, default=opciones,
+            options = get_filter_options(f_cfg)
+            sel = st.multiselect(etiqueta, options, default=options,
                                  placeholder="All")
-            valores[nombre] = sel if sel else opciones
+            values[nombre] = sel if sel else options
 
     st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
-    return valores
+    return values
 
 
 # --------------------------------------------------------------------------- #
@@ -253,7 +333,7 @@ def _filtros_globales(config: dict) -> dict:
 # --------------------------------------------------------------------------- #
 def main():
     # Live-reload config: pick up MCP edits without restarting the server.
-    config = cargar_config()
+    config = load_config()
 
     st.set_page_config(
         page_title=config.get("titulo_pagina", "Dashboard"),
@@ -261,14 +341,14 @@ def main():
         layout="wide",
         initial_sidebar_state="expanded",
     )
-    _vigilar_config()
-    styles.aplicar_estilos()
+    _watch_config()
+    styles.apply_styles()
 
     with st.sidebar:
-        _marca(config)
-        modulo_id = _navegacion(config)
-        _datos(config)
-        filtros_valores = _filtros_globales(config)
+        _brand(config)
+        modulo_id = _navigation(config)
+        _data_source(config)
+        filter_values = _global_filters(config)
         st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
         # Dynamic sidebar disclaimer from config
         disclaimer = config.get("sidebar_disclaimer", "")
@@ -279,11 +359,11 @@ def main():
             )
 
     # Empty state — read from config
-    if not hay_datos():
+    if not has_data():
         empty_title = config.get("empty_state", {}).get("title")
         empty_desc = config.get("empty_state", {}).get("description")
         empty_hint = config.get("empty_state", {}).get("hint")
-        styles.render_estado_sin_datos(
+        styles.render_empty_state(
             empty_state_title=empty_title,
             empty_state_desc=empty_desc,
             empty_state_hint=empty_hint,
@@ -299,10 +379,10 @@ def main():
         return
 
     # Get filter config for WHERE clause injection
-    filtros_config = config.get("filtros_globales", [])
+    filter_config = config.get("filtros_globales", [])
 
     # Render the module dynamically — everything from JSON
-    render_modulo(modulo_config, filtros_config=filtros_config, filtros_valores=filtros_valores)
+    render_modulo(modulo_config, filter_config=filter_config, filter_values=filter_values)
 
     # Footer — dynamic from config
     footer_text = config.get("footer", "")
@@ -331,10 +411,6 @@ def cli_entrypoint():
     Override with ``AGENTUI_HOST`` (e.g. ``0.0.0.0`` to expose it on the LAN)
     and ``AGENTUI_PORT``.
     """
-    import os
-    import subprocess
-    import sys
-
     script_path = Path(__file__).resolve()
     project_root = script_path.parent.parent  # app_base/
     # Repo root contains the `app_base` package; running from there keeps the

@@ -152,7 +152,7 @@ CHART_TYPES = {
 # Recommendation engine — suggests chart type based on DataFrame analysis
 # --------------------------------------------------------------------------- #
 
-def recomendar_grafica(df: pd.DataFrame, sql_context: str = "") -> list[dict]:
+def recommend_chart(df: pd.DataFrame, sql_context: str = "") -> list[dict]:
     """Recommend chart types based on DataFrame column analysis.
 
     Analyzes the DataFrame columns (types, cardinality, names) and suggests
@@ -281,7 +281,7 @@ def recomendar_grafica(df: pd.DataFrame, sql_context: str = "") -> list[dict]:
 # Config builder — creates complete chart config for ui_config.json
 # --------------------------------------------------------------------------- #
 
-def construir_config_grafico(
+def build_chart_config(
     tipo: str,
     sql: str,
     titulo: str,
@@ -356,7 +356,7 @@ def construir_config_grafico(
 # KPI config builder
 # --------------------------------------------------------------------------- #
 
-def construir_config_kpi(
+def build_kpi_config(
     sql: str,
     label: str,
     icono: str,
@@ -406,7 +406,7 @@ def construir_config_kpi(
 # Filter config builder
 # --------------------------------------------------------------------------- #
 
-def construir_config_filtro(
+def build_filter_config(
     nombre: str,
     columna: str,
     tabla: str,
@@ -444,7 +444,7 @@ def construir_config_filtro(
 # Module config builder
 # --------------------------------------------------------------------------- #
 
-def construir_config_modulo(
+def build_module_config(
     modulo_id: str,
     nombre: str,
     icono: str = "📋",
@@ -492,7 +492,7 @@ def construir_config_modulo(
 # Quick reference for the MCP agent
 # --------------------------------------------------------------------------- #
 
-def listar_tipos_grafica() -> str:
+def list_chart_types() -> str:
     """Return a human-readable list of all chart types with usage guidance.
 
     Useful for the MCP agent to understand what chart types are available.

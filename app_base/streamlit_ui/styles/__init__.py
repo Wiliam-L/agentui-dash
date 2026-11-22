@@ -9,13 +9,13 @@ ICON_FONT = BASE_DIR / "assets" / "fonts" / "MaterialIcons-Regular.ttf"
 
 
 @st.cache_resource
-def _font_iconos_b64() -> str:
+def _font_icons_b64() -> str:
     if ICON_FONT.exists():
         return base64.b64encode(ICON_FONT.read_bytes()).decode()
     return ""
 
 
-def colores_grafico() -> dict:
+def chart_colors() -> dict:
     return {
         "paper": "rgba(0,0,0,0)",
         "plot": "rgba(0,0,0,0)",
@@ -25,11 +25,11 @@ def colores_grafico() -> dict:
     }
 
 
-def aplicar_estilos() -> None:
+def apply_styles() -> None:
     st.markdown(_css(), unsafe_allow_html=True)
 
 
-PALETA = [
+PALETTE = [
     "#246bfd",
     "#12b76a",
     "#f59e0b",
@@ -48,7 +48,7 @@ def _css() -> str:
 <style>
 @font-face {{
     font-family: "Material Icons";
-    src: url(data:font/ttf;base64,{_font_iconos_b64()}) format("truetype");
+    src: url(data:font/ttf;base64,{_font_icons_b64()}) format("truetype");
 }}
 
 :root {{
@@ -317,14 +317,14 @@ section[data-testid="stSidebar"] .stButton > button:hover {{
 """
 
 
-def icono(nombre: str, tam: str = "20px", color: str | None = None) -> str:
-    estilo = f"font-size:{tam};"
+def icon(name: str, size: str = "20px", color: str | None = None) -> str:
+    style = f"font-size:{size};"
     if color:
-        estilo += f" color:{color};"
-    return f'<span class="mi" style="{estilo}">{nombre}</span>'
+        style += f" color:{color};"
+    return f'<span class="mi" style="{style}">{name}</span>'
 
 
-def render_estado_sin_datos(empty_state_title=None, empty_state_desc=None, empty_state_hint=None) -> None:
+def render_empty_state(empty_state_title=None, empty_state_desc=None, empty_state_hint=None) -> None:
     """Render the empty state screen. All text can be configured via JSON."""
     title = empty_state_title or "No data to display"
     desc = empty_state_desc or "Upload your data files from the side panel to start analyzing."
