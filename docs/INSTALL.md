@@ -2,7 +2,7 @@
 
 ## Requisitos previos
 
-**uv** — un instalador de paquetes Python rápido. `uv` descarga e instala automáticamente Python 3.11+ si no lo tienes.
+**uv** — un gestor de paquetes Python rápido. Cuando ejecutas un comando de `uv` que requiere Python, este se descarga automáticamente (Python 3.10+) si no lo tienes instalado.
 
 ### Instalar uv
 
@@ -84,9 +84,20 @@ Edita `~/.claude/claude_desktop_config.json`:
 {
   "mcpServers": {
     "agentui-dash": {
-      "command": "uv",
-      "args": ["run", "agentui-mcp"],
-      "cwd": "C:\\path\\to\\agentui-dash"
+      "command": "agentui-mcp"
+    }
+  }
+}
+```
+
+Si `agentui-mcp` no se encuentra en el PATH, usa:
+
+```json
+{
+  "mcpServers": {
+    "agentui-dash": {
+      "command": "python",
+      "args": ["-m", "agentui_mcp"]
     }
   }
 }
