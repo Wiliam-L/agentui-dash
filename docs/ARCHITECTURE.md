@@ -66,7 +66,7 @@ La ventaja es directa: el mismo sistema sirve ventas, inventario, logística o c
 │   ├── INSTALL.md              # Guía de instalación
 │   └── ARCHITECTURE.md         # Este archivo
 ├── examples/                   # Datos de ejemplo para pruebas
-└── build_mcp/                  # Wheel pre-construido y scripts de build
+└── dist/                       # Distribución (generado por build)
 ```
 
 ## Seguridad
