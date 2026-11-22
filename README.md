@@ -133,6 +133,7 @@ Para todas las opciones de instalación (código fuente, Docker, otros clientes 
 2. Exportación a PDF.
 3. Fuentes de datos externas (PostgreSQL, MySQL).
 4. Personalización avanzada de temas y layouts.
+5. **Autenticación y acceso seguro** — integrar un reverse proxy (Cloudflare Access o Auth0) para proteger dashboards con login sin modificar código de la app. Cubierto gratis hasta 100 usuarios activos (Cloudflare) o 7,500 (Auth0).
 
 ## Licencia
 
