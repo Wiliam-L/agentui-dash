@@ -38,11 +38,35 @@ uv sync
 
 `uv sync` instala Python automáticamente si no lo tienes, y descarga todas las dependencias necesarias.
 
-**Paso 3 — Conectar con Opencode**
+**Paso 3 — Conectar con tu cliente MCP**
 
-```powershell
-opencode mcp add agentui-dash --global -- agentui-mcp
+**Opencode** — agrega esta entrada en `~/.config/opencode/opencode.jsonc`:
+
+```json
+{
+  "mcpServers": {
+    "agentui-dash": {
+      "command": "uv",
+      "args": ["run", "agentui-mcp"]
+    }
+  }
+}
 ```
+
+**Junie** — agrega esta entrada en `~/.junie/mcp/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "agentui-dash": {
+      "command": "uv",
+      "args": ["run", "agentui-mcp"]
+    }
+  }
+}
+```
+
+> ⚠️ Asegúrate de ejecutar estos comandos desde el directorio del repositorio clonado, o configura el `cwd` en la entrada del servidor MCP.
 
 **Paso 4 — Probar con datos de ejemplo**
 

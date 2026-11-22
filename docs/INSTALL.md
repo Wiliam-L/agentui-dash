@@ -54,12 +54,35 @@ El dashboard estará disponible en `http://localhost:8501`.
 
 ### Opencode
 
-Desde el directorio del proyecto:
+Agrega esta entrada en `~/.config/opencode/opencode.jsonc`:
 
-```powershell
-opencode mcp add agentui-dash --global -- uv run agentui-mcp
-opencode mcp list
+```json
+{
+  "mcpServers": {
+    "agentui-dash": {
+      "command": "uv",
+      "args": ["run", "agentui-mcp"]
+    }
+  }
+}
 ```
+
+### Junie
+
+Agrega esta entrada en `~/.junie/mcp/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "agentui-dash": {
+      "command": "uv",
+      "args": ["run", "agentui-mcp"]
+    }
+  }
+}
+```
+
+> ⚠️ En ambos casos, asegúrate de que el comando se ejecute desde el directorio del repositorio clonado, o agrega un campo `cwd` con la ruta al proyecto.
 
 ### Claude Desktop
 
@@ -124,8 +147,15 @@ uv run ui
 
 ### Servidor MCP No Encontrado
 
-Si `agentui-mcp` no se encuentra, usa el módulo directamente:
+Si `uv run agentui-mcp` no funciona, usa el módulo directamente en la configuración JSON:
 
-```powershell
-opencode mcp add agentui-dash --global -- python -m agentui_mcp
+```json
+{
+  "mcpServers": {
+    "agentui-dash": {
+      "command": "python",
+      "args": ["-m", "agentui_mcp"]
+    }
+  }
+}
 ```
