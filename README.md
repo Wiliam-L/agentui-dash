@@ -1,5 +1,7 @@
 # AgentUI Dash
 
+![Portada](port.png)
+
 **Genera un dashboard corporativo desde un CSV en minutos con un agente de IA.**
 
 AgentUI Dash conecta un agente de IA (vía MCP) con DuckDB y Streamlit para crear dashboards funcionales: el agente carga los datos, detecta columnas, genera KPIs y gráficos, y entrega un dashboard listo para usar. Los números se validan con verificación cruzada automática.
