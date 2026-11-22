@@ -18,32 +18,17 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ---
 
-## Opción A: Paquete pre-construido (Recomendada)
+## Opción A: Desde el código fuente (Recomendada)
 
-Descarga el archivo `.whl` desde `build_mcp/` e instálalo globalmente:
-
-```powershell
-uv tool install agentui_dash-0.1.0-py3-none-any.whl
-```
-
-Después de la instalación, dos comandos están disponibles globalmente:
-
-| Comando | Descripción |
-|---|---|
-| `ui` | Iniciar el dashboard Streamlit |
-| `agentui-mcp` | Iniciar el servidor MCP para agentes de IA |
-
----
-
-## Opción B: Desde el código fuente
-
-Clona el repositorio e instala desde el directorio raíz:
+Clona el repositorio e instala las dependencias:
 
 ```powershell
 git clone https://github.com/Wiliam-L/agentui-dash.git
 cd agentui-dash
 uv sync
 ```
+
+`uv sync` descarga Python automáticamente si no lo tienes, e instala todas las dependencias.
 
 Ejecutar con:
 ```powershell
@@ -53,7 +38,7 @@ uv run agentui-mcp # Iniciar servidor MCP
 
 ---
 
-## Opción C: Docker
+## Opción B: Docker
 
 Para un entorno completamente aislado sin instalar Python ni `uv`:
 
@@ -69,10 +54,10 @@ El dashboard estará disponible en `http://localhost:8501`.
 
 ### Opencode
 
-Si instalaste con `uv tool install`:
+Desde el directorio del proyecto:
 
 ```powershell
-opencode mcp add agentui-dash --global -- agentui-mcp
+opencode mcp add agentui-dash --global -- uv run agentui-mcp
 opencode mcp list
 ```
 
@@ -139,7 +124,7 @@ uv run ui
 
 ### Servidor MCP No Encontrado
 
-Si `agentui-mcp` no está en tu PATH después de `uv tool install`, usa:
+Si `agentui-mcp` no se encuentra, usa el módulo directamente:
 
 ```powershell
 opencode mcp add agentui-dash --global -- python -m agentui_mcp

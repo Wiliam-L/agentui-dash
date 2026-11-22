@@ -28,13 +28,15 @@ powershell -ExecutionPolicy Bypass -c "irm https://astral.sh/uv/install.ps1 | ie
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-**Paso 2 — Instalar el paquete**
-
-Descarga el archivo `.whl` desde [build_mcp/](build_mcp/) e instálalo:
+**Paso 2 — Clonar el repositorio e instalar**
 
 ```powershell
-uv tool install build_mcp/agentui_dash-0.1.0-py3-none-any.whl
+git clone https://github.com/Wiliam-L/agentui-dash.git
+cd agentui-dash
+uv sync
 ```
+
+`uv sync` instala Python automáticamente si no lo tienes, y descarga todas las dependencias necesarias.
 
 **Paso 3 — Conectar con Opencode**
 
@@ -80,7 +82,7 @@ Usuario  →  Agente IA  →  MCP Server  →  ui_config.json  →  Streamlit UI
 
 ## Herramientas MCP
 
-El agente tiene acceso a **29 herramientas públicas** organizadas en categorías: dashboard, datos, configuración, consultas, filtros, detección, gráficos y servidor.
+El agente tiene acceso a **30 herramientas públicas** organizadas en categorías: dashboard, datos, configuración, consultas, filtros, detección, gráficos y servidor.
 
 [Lista completa de herramientas →](docs/TOOLS.md)
 
