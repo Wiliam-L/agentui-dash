@@ -352,35 +352,46 @@ def _global_filters(config: dict) -> dict:
 def _pdf_export_button(config: dict, filter_values: dict) -> None:
     """PDF export button in the sidebar.
 
-    Generates the PDF lazily only when the user clicks the button, not on
-    every rerun.  The download is offered via ``st.download_button`` so the
-    browser handles the file save.
+    Generates the PDF on demand and triggers an immediate browser download
+    using st.download_button.  The PDF bytes are cached in session state so
+    the heavy generation only runs once per click.
     """
     if not has_data():
         return
 
     st.markdown('<div class="side-label">Export</div>', unsafe_allow_html=True)
 
-    clicked = st.button("Exportar a PDF", use_container_width=True, type="secondary")
+    brand = config.get("brand_name", "Dashboard")
+    safe_name = re.sub(r"[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s]", "", brand).strip().replace(" ", "_")
+    file_name = f"{safe_name}.pdf"
 
-    if clicked:
-        try:
-            from core.pdf_export import generate_pdf
-        except ImportError as exc:
-            st.error(f"No se puede generar el PDF: {exc}")
-            return
+    # Generate PDF if not already cached or if filters changed
+    pdf_key = "pdf_bytes_cache"
+    filter_key = "pdf_filter_hash"
+    current_filter_hash = hash(str(sorted(filter_values.items()))) if filter_values else 0
 
+    need_gen = (
+        pdf_key not in st.session_state
+        or st.session_state.get(filter_key) != current_filter_hash
+    )
+
+    if need_gen:
         with st.spinner("Generando PDF..."):
-            pdf_bytes = generate_pdf(config, filter_values)
+            try:
+                from core.pdf_export import generate_pdf
+                st.session_state[pdf_key] = generate_pdf(config, filter_values)
+                st.session_state[filter_key] = current_filter_hash
+            except ImportError as exc:
+                st.error(f"No se puede generar el PDF: {exc}")
+                st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
+                return
+        st.rerun()
 
-        # Build a clean file name from brand_name
-        brand = config.get("brand_name", "Dashboard")
-        safe_name = re.sub(r"[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s]", "", brand).strip().replace(" ", "_")
-        file_name = f"{safe_name}.pdf"
-
+    # Show download button with ready PDF
+    if pdf_key in st.session_state:
         st.download_button(
-            label="Descargar PDF",
-            data=pdf_bytes,
+            label="Exportar a PDF",
+            data=st.session_state[pdf_key],
             file_name=file_name,
             mime="application/pdf",
             use_container_width=True,

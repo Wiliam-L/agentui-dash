@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import io
 import logging
+import math
 import re
 from datetime import datetime
 from pathlib import Path
@@ -207,6 +208,31 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 
+def _draw_rounded_rect(pdf, x, y, w, h, r, style="F"):
+    """Draw a rounded rectangle using FPDF polygon."""
+    k = pdf.k
+    x_pt, y_pt = x * k, y * k
+    w_pt, h_pt = w * k, h * k
+    r_pt = r * k
+    
+    # Define rounded rectangle path
+    pdf._out(f"q {x_pt} {y_pt} m")
+    pdf._out(f"{x_pt + w_pt - r_pt} {y_pt} l")
+    pdf._out(f"{x_pt + w_pt - r_pt} {y_pt} {x_pt + w_pt} {y_pt} {x_pt + w_pt} {y_pt + r_pt} c")
+    pdf._out(f"{x_pt + w_pt} {y_pt + h_pt - r_pt} l")
+    pdf._out(f"{x_pt + w_pt} {y_pt + h_pt - r_pt} {x_pt + w_pt} {y_pt + h_pt} {x_pt + w_pt - r_pt} {y_pt + h_pt} c")
+    pdf._out(f"{x_pt + r_pt} {y_pt + h_pt} l")
+    pdf._out(f"{x_pt + r_pt} {y_pt + h_pt} {x_pt} {y_pt + h_pt} {x_pt} {y_pt + h_pt - r_pt} c")
+    pdf._out(f"{x_pt} {y_pt + r_pt} l")
+    pdf._out(f"{x_pt} {y_pt + r_pt} {x_pt} {y_pt} {x_pt + r_pt} {y_pt} c")
+    
+    if style in ("F", "DF"):
+        pdf._out("f")
+    if style in ("D", "DF"):
+        pdf._out("S")
+    pdf._out("Q")
+
+
 # --------------------------------------------------------------------------- #
 # Public API
 # --------------------------------------------------------------------------- #
@@ -239,8 +265,19 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
     modulos = config.get("modulos", [])
     primary_color = config.get("primary_color", "#246bfd")
 
+    # Parse primary color
+    try:
+        primary_rgb = _hex_to_rgb(primary_color) if primary_color else (36, 107, 253)
+    except (ValueError, TypeError):
+        primary_rgb = (36, 107, 253)
+    
+    # Lighter shade for accents
+    light_primary = tuple(min(255, int(c * 0.1) + 240) for c in primary_rgb)
+    # Medium shade for backgrounds
+    medium_primary = tuple(min(255, int(c * 0.2) + 200) for c in primary_rgb)
+
     pdf = FPDF(format="A4", unit="mm")
-    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.set_auto_page_break(auto=True, margin=25)
 
     # Use built-in fonts (Helvetica, Times, Courier) available on any OS
     # For Unicode support (Spanish accents), try to add a system font
@@ -276,51 +313,147 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
 
     pdf.set_font(_font_family, size=12)
 
-    def _add_page_number(pdf):
-        pdf.set_y(-15)
-        pdf.set_font(_font_family, size=8)
+    # Store references for header/footer callbacks
+    pdf._primary_rgb = primary_rgb
+    pdf._medium_primary = medium_primary
+    pdf._font_family = _font_family
+    pdf._footer_text = footer_text
+    pdf._current_module = ""
+
+    def _custom_header(pdf):
+        """Custom header called automatically by FPDF."""
+        if pdf.page_no() == 1:
+            return  # Skip header on cover page
+        if pdf._current_module:
+            _draw_header(pdf, pdf._current_module)
+            pdf.ln(8)
+
+    def _custom_footer(pdf):
+        """Custom footer called automatically by FPDF."""
+        if pdf.page_no() == 1:
+            return  # Skip footer on cover page
+        pdf.set_y(-20)
+        # Line separator
+        pdf.set_draw_color(226, 232, 240)
+        pdf.set_line_width(0.2)
+        pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+        pdf.ln(1)
+        # Footer text
+        pdf.set_font(pdf._font_family, size=7)
         pdf.set_text_color(148, 163, 184)
-        pdf.cell(0, 10, f"Pagina {pdf.page_no()}", align="C")
+        if pdf._footer_text:
+            pdf.cell(95, 5, pdf._footer_text, align="L")
+        pdf.cell(95, 5, f"Pagina {pdf.page_no()}", align="R")
+
+    pdf.header = lambda: _custom_header(pdf)
+    pdf.footer = lambda: _custom_footer(pdf)
+
+    # Store module info for TOC
+    module_info = []
 
     def _draw_header(pdf, title: str):
-        if primary_color:
-            try:
-                r, g, b = _hex_to_rgb(primary_color)
-            except (ValueError, TypeError):
-                r, g, b = 36, 107, 253
-        else:
-            r, g, b = 36, 107, 253
-        pdf.set_fill_color(r, g, b)
-        pdf.rect(0, 0, 210, 12, "F")
-        pdf.set_y(3)
-        pdf.set_x(10)
-        pdf.set_font(_font_family, "B", size=11)
+        """Draw professional header with gradient-like effect."""
+        # Main header bar
+        pdf.set_fill_color(*primary_rgb)
+        pdf.rect(0, 0, 210, 15, "F")
+        
+        # Accent line at bottom
+        pdf.set_fill_color(*medium_primary)
+        pdf.rect(0, 15, 210, 1, "F")
+        
+        # Title text
+        pdf.set_y(4)
+        pdf.set_x(15)
+        pdf.set_font(_font_family, "B", size=12)
         pdf.set_text_color(255, 255, 255)
-        pdf.cell(0, 6, title, align="L")
+        pdf.cell(0, 7, title, align="L")
+        
+        # Page indicator
+        pdf.set_x(195)
+        pdf.set_font(_font_family, size=8)
+        pdf.cell(0, 7, str(pdf.page_no()), align="R")
 
     # --- Cover page ---
     pdf.add_page()
-    pdf.ln(40)
-    pdf.set_font(_font_family, "B", size=24)
-    pdf.set_text_color(15, 23, 42)
-    pdf.cell(0, 12, brand_name, align="C", new_x="LMARGIN", new_y="NEXT")
+    
+    # Top color bar
+    pdf.set_fill_color(*primary_rgb)
+    pdf.rect(0, 0, 210, 80, "F")
+    
+    # Accent line
+    pdf.set_fill_color(*medium_primary)
+    pdf.rect(0, 80, 210, 3, "F")
+    
+    # Brand name
+    pdf.set_y(30)
+    pdf.set_font(_font_family, "B", size=28)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 14, brand_name, align="C", new_x="LMARGIN", new_y="NEXT")
+    
+    # Subtitle
     if brand_sub:
-        pdf.ln(4)
         pdf.set_font(_font_family, size=14)
-        pdf.set_text_color(100, 116, 139)
+        pdf.set_text_color(240, 240, 250)
         pdf.cell(0, 10, brand_sub, align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(20)
-    today = datetime.now().strftime("%d/%m/%Y")
+    
+    # Date and info
+    pdf.set_y(100)
+    pdf.set_font(_font_family, "B", size=16)
+    pdf.set_text_color(*primary_rgb)
+    pdf.cell(0, 10, "Reporte de Dashboard", align="C", new_x="LMARGIN", new_y="NEXT")
+    
+    pdf.ln(5)
     pdf.set_font(_font_family, size=10)
-    pdf.set_text_color(148, 163, 184)
-    pdf.cell(0, 8, f"Reporte generado el {today}", align="C", new_x="LMARGIN", new_y="NEXT")
-
+    pdf.set_text_color(100, 116, 139)
+    today = datetime.now().strftime("%d de %B de %Y")
+    pdf.cell(0, 8, f"Generado el {today}", align="C", new_x="LMARGIN", new_y="NEXT")
+    
+    # Table of contents
+    pdf.ln(15)
+    pdf.set_font(_font_family, "B", size=12)
+    pdf.set_text_color(15, 23, 42)
+    pdf.cell(0, 8, "Contenido", align="C", new_x="LMARGIN", new_y="NEXT")
+    
+    pdf.ln(3)
+    # Separator line
+    pdf.set_draw_color(*primary_rgb)
+    pdf.set_line_width(0.5)
+    pdf.line(60, pdf.get_y(), 150, pdf.get_y())
+    pdf.ln(5)
+    
+    y_toc = pdf.get_y()
+    toc_entries = []
+    for i, mod in enumerate(modulos, 1):
+        mod_name = mod.get("nombre", f"Seccion {i}")
+        # Number
+        pdf.set_font(_font_family, "B", size=10)
+        pdf.set_text_color(*primary_rgb)
+        pdf.cell(15, 6, f"{i}.", align="R")
+        # Name
+        pdf.set_font(_font_family, size=10)
+        pdf.set_text_color(51, 65, 85)
+        pdf.cell(130, 6, mod_name, align="L")
+        
+        # Dotted line to page number
+        pdf.set_draw_color(203, 213, 225)
+        pdf.set_line_width(0.1)
+        y_line = pdf.get_y() - 3
+        pdf.line(25, y_line, 160, y_line)
+        
+        # Page number (right aligned) - use x=160, w=40 to position correctly
+        toc_entries.append({"y": y_line, "page": i + 1})
+        pdf.set_x(160)
+        pdf.set_font(_font_family, "B", size=9)
+        pdf.set_text_color(*primary_rgb)
+        pdf.cell(40, 6, str(i + 1), align="R")
+        pdf.ln(2)
     # --- Sections per module ---
-    for mod in modulos:
-        mod_name = mod.get("nombre", "Módulo")
+    module_start_pages = []
+    for mod_idx, mod in enumerate(modulos):
+        mod_name = mod.get("nombre", "Modulo")
+        pdf._current_module = mod_name
         pdf.add_page()
-        _draw_header(pdf, mod_name)
-        pdf.ln(6)
+        module_start_pages.append(pdf.page_no())
 
         # KPIs
         kpis = mod.get("kpis", [])
@@ -337,25 +470,36 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
                 x_pos = x_start + i * (col_width + 5)
                 y_pos = pdf.get_y()
 
-                # Card background
-                pdf.set_fill_color(241, 245, 249)
-                pdf.rect(x_pos, y_pos, col_width, 30, "F")
+                # Card with rounded corners and shadow effect
+                # Shadow
+                pdf.set_fill_color(200, 210, 220)
+                _draw_rounded_rect(pdf, x_pos + 0.5, y_pos + 0.5, col_width, 35, 2, "F")
+                
+                # Main card
+                pdf.set_fill_color(255, 255, 255)
+                _draw_rounded_rect(pdf, x_pos, y_pos, col_width, 35, 2, "F")
+                
+                # Border
                 pdf.set_draw_color(226, 232, 240)
                 pdf.set_line_width(0.3)
-                pdf.rect(x_pos, y_pos, col_width, 30, "D")
-
+                _draw_rounded_rect(pdf, x_pos, y_pos, col_width, 35, 2, "D")
+                
+                # Top accent bar
+                pdf.set_fill_color(*primary_rgb)
+                pdf.rect(x_pos, y_pos, col_width, 2, "F")
+                
                 # Label
-                pdf.set_xy(x_pos + 4, y_pos + 4)
+                pdf.set_xy(x_pos + 4, y_pos + 5)
                 pdf.set_font(_font_family, size=7)
                 pdf.set_text_color(100, 116, 139)
                 pdf.multi_cell(col_width - 8, 4, label.upper(), align="C")
-
+                
                 # Value
                 pdf.set_xy(x_pos + 4, pdf.get_y() + 2)
                 pdf.set_font(_font_family, "B", size=14)
-                pdf.set_text_color(15, 23, 42)
+                pdf.set_text_color(*primary_rgb)
                 pdf.multi_cell(col_width - 8, 6, formatted, align="C")
-
+                
                 # Sub label
                 if sub_label:
                     pdf.set_xy(x_pos + 4, pdf.get_y() + 1)
@@ -363,12 +507,12 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
                     pdf.set_text_color(148, 163, 184)
                     pdf.multi_cell(col_width - 8, 3, sub_label, align="C")
 
-            pdf.ln(8)
+            pdf.ln(10)
 
         # Charts
         charts = mod.get("graficos", [])
         for chart_cfg in charts:
-            title = chart_cfg.get("titulo", "Gráfico")
+            title = chart_cfg.get("titulo", "Grafico")
             subtitle = chart_cfg.get("sub", "")
 
             # Execute query
@@ -405,27 +549,35 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
                 if key in chart_cfg:
                     chart_build_cfg[key] = chart_cfg[key]
 
-            # Title
+            # Title with accent
             pdf.set_font(_font_family, "B", size=11)
             pdf.set_text_color(51, 65, 85)
             pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT")
+            
             if subtitle:
                 pdf.set_font(_font_family, size=8)
                 pdf.set_text_color(148, 163, 184)
                 pdf.cell(0, 6, subtitle, new_x="LMARGIN", new_y="NEXT")
+            
+            # Separator line
+            pdf.set_draw_color(*medium_primary)
+            pdf.set_line_width(0.3)
+            y_sep = pdf.get_y()
+            pdf.line(10, y_sep, 200, y_sep)
+            pdf.ln(3)
 
             # Chart image
             png_bytes = _chart_to_png(chart_build_cfg, df)
             if png_bytes:
                 # Check if we need a new page for the chart
-                available_height = pdf.h - pdf.get_y() - 20
+                available_height = pdf.h - pdf.get_y() - 25
                 if available_height < 60:
                     pdf.add_page()
                     _draw_header(pdf, mod_name)
 
                 img_x = pdf.get_x()
                 img_y = pdf.get_y()
-                img_width = 180
+                img_width = 185
                 # Estimate height maintaining aspect ratio (PNG is 2x scale)
                 try:
                     from PIL import Image
@@ -436,25 +588,42 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
                     img_height = 90
 
                 # Cap height to fit on page
-                max_height = pdf.h - img_y - 25
+                max_height = pdf.h - img_y - 30
                 if img_height > max_height:
                     img_height = max_height
-                    img_width = img_height / aspect if 'aspect' in dir() else 180
+                    img_width = img_height / aspect if 'aspect' in dir() else 185
+
+                # Card background for chart
+                pdf.set_fill_color(255, 255, 255)
+                pdf.set_draw_color(241, 245, 249)
+                pdf.set_line_width(0.2)
+                pdf.rect(img_x + 2, img_y - 2, img_width + 4, img_height + 4, "FD")
 
                 pdf.image(png_bytes, x=img_x + 5, y=img_y, w=img_width)
-                pdf.set_y(img_y + img_height + 6)
+                pdf.set_y(img_y + img_height + 8)
             else:
                 pdf.set_font(_font_family, size=9)
                 pdf.set_text_color(148, 163, 184)
                 pdf.cell(0, 6, "Grafico no disponible", new_x="LMARGIN", new_y="NEXT")
+            
+            pdf.ln(3)
 
         # Tables
         tables = mod.get("tablas", [])
         for table_cfg in tables:
             t_title = table_cfg.get("titulo", "Tabla")
+            
+            # Title with accent
             pdf.set_font(_font_family, "B", size=11)
             pdf.set_text_color(51, 65, 85)
             pdf.cell(0, 8, t_title, new_x="LMARGIN", new_y="NEXT")
+            
+            # Separator line
+            pdf.set_draw_color(*medium_primary)
+            pdf.set_line_width(0.3)
+            y_sep = pdf.get_y()
+            pdf.line(10, y_sep, 200, y_sep)
+            pdf.ln(2)
 
             df = execute_query(table_cfg, filter_config, filter_values)
             limit = table_cfg.get("limite", 50)
@@ -469,34 +638,32 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
             num_cols = len(cols)
             col_w = 190 / num_cols
 
-            # Header row
-            pdf.set_fill_color(241, 245, 249)
-            pdf.set_font(_font_family, "B", size=7)
-            pdf.set_text_color(51, 65, 85)
+            # Header row with primary color
+            pdf.set_fill_color(*primary_rgb)
+            pdf.set_font(_font_family, "B", size=8)
+            pdf.set_text_color(255, 255, 255)
             for col in cols:
-                pdf.cell(col_w, 6, str(col), border=1, fill=True, align="C", new_x="RIGHT")
+                pdf.cell(col_w, 7, str(col), border=1, fill=True, align="C", new_x="RIGHT")
             pdf.ln()
 
-            # Data rows
+            # Data rows with alternating colors
             pdf.set_font(_font_family, size=7)
-            pdf.set_text_color(71, 85, 105)
-            for _, row in df_display.iterrows():
+            for row_idx, (_, row) in enumerate(df_display.iterrows()):
+                if row_idx % 2 == 0:
+                    pdf.set_fill_color(248, 250, 252)
+                else:
+                    pdf.set_fill_color(255, 255, 255)
+                
+                pdf.set_text_color(71, 85, 105)
                 for j, col in enumerate(cols):
                     val = str(row[col]) if pd.notna(row[col]) else ""
                     # Truncate long values
                     if len(val) > 25:
                         val = val[:22] + "..."
-                    pdf.cell(col_w, 5, val, border=1, align="C", new_x="RIGHT")
+                    pdf.cell(col_w, 5, val, border=1, fill=True, align="C", new_x="RIGHT")
                 pdf.ln()
 
-            pdf.ln(4)
-
-    # --- Footer on last page ---
-    if footer_text:
-        pdf.ln(6)
-        pdf.set_font(_font_family, size=7)
-        pdf.set_text_color(203, 213, 225)
-        pdf.cell(0, 6, footer_text, align="C", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(5)
 
     # Output PDF bytes
     output = io.BytesIO()
