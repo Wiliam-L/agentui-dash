@@ -7,6 +7,7 @@ The future MCP server will write this JSON; the UI just renders it.
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -248,8 +249,6 @@ def _tables_referenced_in_config(config: dict) -> list[str]:
     to find which DuckDB tables are actually used by the dashboard. Only those
     tables should be exposed in the Data Source panel.
     """
-    import re
-
     referenced: set[str] = set()
 
     # Global filters can declare a tabla
