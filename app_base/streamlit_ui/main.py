@@ -7,7 +7,6 @@ The future MCP server will write this JSON; the UI just renders it.
 import io
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -33,7 +32,6 @@ from core.data import (
 )
 from core.tools import get_filter_options, get_date_range
 from streamlit_ui import styles
-from streamlit_ui.pdf_save_button import pdf_save_button
 from streamlit_ui.views.dynamic import render as render_modulo
 
 # --------------------------------------------------------------------------- #
@@ -373,30 +371,13 @@ def _global_filters(config: dict) -> dict:
 
 
 def _pdf_export_button(config: dict, filter_values: dict) -> None:
-    """PDF export section in the sidebar — currently disabled (unstable).
+    """PDF export is intentionally hidden from the UI.
 
-    The PDF generation feature exists in the codebase but is not stable yet.
-    The button is disabled and a "coming soon" message is shown instead.
-    See README Roadmap item #4 for the plan to make it stable.
+    The backend functionality (`core.pdf_export`) remains available for
+    future re-enablement or MCP-driven use. The feature exists but is
+    not yet stable for end-user exposure.
     """
-    if not has_data():
-        return
-
-    st.markdown('<div class="side-label">Export</div>', unsafe_allow_html=True)
-    st.button(
-        ":material/lock:  Generar reporte",
-        use_container_width=True,
-        type="secondary",
-        disabled=True,
-        help="La exportación a PDF estará disponible próximamente.",
-    )
-    st.caption(
-        "La exportación a PDF no es estable actualmente. "
-        "Se trabajará en una versión estable próximamente.",
-        unsafe_allow_html=True,
-    )
-
-    st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
+    pass
 
 
 # --------------------------------------------------------------------------- #
@@ -421,7 +402,6 @@ def main():
         modulo_id = _navigation(config)
         _data_source(config)
         filter_values = _global_filters(config)
-        _pdf_export_button(config, filter_values)
         st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
         # Dynamic sidebar disclaimer from config
         disclaimer = config.get("sidebar_disclaimer", "")
