@@ -4,6 +4,7 @@ Reads ``ui_config.json`` for everything: modules, KPIs, charts, filters, SQL.
 No hardcoded views, no hardcoded queries, no hardcoded column names.
 The future MCP server will write this JSON; the UI just renders it.
 """
+import base64
 import io
 import json
 import os
@@ -349,12 +350,32 @@ def _global_filters(config: dict) -> dict:
     return values
 
 
+def _auto_download_script(pdf_bytes: bytes, file_name: str) -> str:
+    """Generate an HTML snippet that auto-triggers a browser download via blob URL."""
+    b64 = base64.b64encode(pdf_bytes).decode("ascii")
+    html = f"""<html><head>
+<script>
+window.onload = function() {{
+  const bytes = Uint8Array.from(atob("{b64}"), c => c.charCodeAt(0));
+  const blob = new Blob([bytes], {{type: "application/pdf"}});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "{file_name}";
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(url);
+}};
+</script>
+</head><body></body></html>"""
+    return html
+
+
 def _pdf_export_button(config: dict, filter_values: dict) -> None:
     """PDF export button in the sidebar.
 
-    Generates the PDF ONLY when the user clicks the button.
-    The PDF bytes are cached in session_state so the heavy generation
-    runs only once per click, not on every page load or filter change.
+    Flow: Click 'Exportar a PDF' → generates PDF with spinner → then automatically
+    triggers the browser's save dialog using a hidden HTML component with blob URL.
     """
     if not has_data():
         return
@@ -365,34 +386,25 @@ def _pdf_export_button(config: dict, filter_values: dict) -> None:
     safe_name = re.sub(r"[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s]", "", brand).strip().replace(" ", "_")
     file_name = f"{safe_name}.pdf"
 
-    pdf_key = "pdf_bytes_cache"
-
-    # Check if PDF is already ready for download
-    if pdf_key in st.session_state:
-        st.download_button(
-            label="Exportar a PDF",
-            data=st.session_state[pdf_key],
-            file_name=file_name,
-            mime="application/pdf",
-            use_container_width=True,
-            type="secondary",
-        )
-        st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
-        return
-
-    # Show the export button - only generates when clicked
+    # Show the export button
     clicked = st.button("Exportar a PDF", use_container_width=True, type="secondary")
 
     if clicked:
         with st.spinner("Generando PDF..."):
             try:
                 from core.pdf_export import generate_pdf
-                st.session_state[pdf_key] = generate_pdf(config, filter_values)
+                pdf_bytes = generate_pdf(config, filter_values)
             except ImportError as exc:
                 st.error(f"No se puede generar el PDF: {exc}")
                 st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
                 return
-        st.rerun()
+
+        # Auto-trigger browser download using hidden HTML component
+        script_html = _auto_download_script(pdf_bytes, file_name)
+        try:
+            st.components.v2.html(script_html, height=0, scrolling=False)
+        except AttributeError:
+            st.components.v1.html(script_html, height=0, scrolling=False)
 
     st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
 
