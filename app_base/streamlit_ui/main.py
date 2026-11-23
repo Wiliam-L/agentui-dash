@@ -352,9 +352,9 @@ def _global_filters(config: dict) -> dict:
 def _pdf_export_button(config: dict, filter_values: dict) -> None:
     """PDF export button in the sidebar.
 
-    Generates the PDF on demand and triggers an immediate browser download
-    using st.download_button.  The PDF bytes are cached in session state so
-    the heavy generation only runs once per click.
+    Generates the PDF ONLY when the user clicks the button.
+    The PDF bytes are cached in session_state so the heavy generation
+    runs only once per click, not on every page load or filter change.
     """
     if not has_data():
         return
@@ -365,29 +365,9 @@ def _pdf_export_button(config: dict, filter_values: dict) -> None:
     safe_name = re.sub(r"[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s]", "", brand).strip().replace(" ", "_")
     file_name = f"{safe_name}.pdf"
 
-    # Generate PDF if not already cached or if filters changed
     pdf_key = "pdf_bytes_cache"
-    filter_key = "pdf_filter_hash"
-    current_filter_hash = hash(str(sorted(filter_values.items()))) if filter_values else 0
 
-    need_gen = (
-        pdf_key not in st.session_state
-        or st.session_state.get(filter_key) != current_filter_hash
-    )
-
-    if need_gen:
-        with st.spinner("Generando PDF..."):
-            try:
-                from core.pdf_export import generate_pdf
-                st.session_state[pdf_key] = generate_pdf(config, filter_values)
-                st.session_state[filter_key] = current_filter_hash
-            except ImportError as exc:
-                st.error(f"No se puede generar el PDF: {exc}")
-                st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
-                return
-        st.rerun()
-
-    # Show download button with ready PDF
+    # Check if PDF is already ready for download
     if pdf_key in st.session_state:
         st.download_button(
             label="Exportar a PDF",
@@ -397,6 +377,22 @@ def _pdf_export_button(config: dict, filter_values: dict) -> None:
             use_container_width=True,
             type="secondary",
         )
+        st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
+        return
+
+    # Show the export button - only generates when clicked
+    clicked = st.button("Exportar a PDF", use_container_width=True, type="secondary")
+
+    if clicked:
+        with st.spinner("Generando PDF..."):
+            try:
+                from core.pdf_export import generate_pdf
+                st.session_state[pdf_key] = generate_pdf(config, filter_values)
+            except ImportError as exc:
+                st.error(f"No se puede generar el PDF: {exc}")
+                st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
+                return
+        st.rerun()
 
     st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
 
