@@ -33,6 +33,7 @@ from core.data import (
 )
 from core.tools import get_filter_options, get_date_range
 from streamlit_ui import styles
+from streamlit_ui.pdf_save_button import pdf_save_button
 from streamlit_ui.views.dynamic import render as render_modulo
 
 # --------------------------------------------------------------------------- #
@@ -150,7 +151,7 @@ def _navigation(config: dict) -> str:
     """Dynamically build sidebar navigation from config['modulos']."""
     st.markdown('<div class="side-label">Modules</div>', unsafe_allow_html=True)
     modulos = config.get("modulos", [])
-    etiquetas = [f"{m.get('icono', '📋')} {m.get('nombre', 'Module')}" for m in modulos]
+    etiquetas = [f"{m.get('icono', '')} {m.get('nombre', 'Module')}" for m in modulos]
     eleccion = st.radio(
         "Modules",
         etiquetas,
@@ -241,63 +242,84 @@ def _process_data_update() -> None:
         st.error(f"Failed to update data: {e}")
 
 
+def _tables_referenced_in_config(config: dict) -> list[str]:
+    """Extract table names referenced in SQL queries across the config.
+
+    Scans filtros_globales (columna/tabla), module KPIs, charts and tables SQL
+    to find which DuckDB tables are actually used by the dashboard. Only those
+    tables should be exposed in the Data Source panel.
+    """
+    import re
+
+    referenced: set[str] = set()
+
+    # Global filters can declare a tabla
+    for f_cfg in config.get("filtros_globales", []):
+        tabla = f_cfg.get("tabla")
+        if tabla:
+            referenced.add(tabla)
+
+    for mod in config.get("modulos", []):
+        for kpi in mod.get("kpis", []):
+            sql = kpi.get("sql", "")
+            referenced.update(_table_names_from_sql(sql))
+            sql = kpi.get("sub_sql", "")
+            referenced.update(_table_names_from_sql(sql))
+
+        for g in mod.get("graficos", []):
+            sql = g.get("sql", "")
+            referenced.update(_table_names_from_sql(sql))
+
+        for t in mod.get("tablas", []):
+            sql = t.get("sql", "")
+            referenced.update(_table_names_from_sql(sql))
+
+    return sorted(referenced)
+
+
+def _table_names_from_sql(sql: str) -> set[str]:
+    """Best-effort extraction of table names from a SQL SELECT statement."""
+    names: set[str] = set()
+    if not isinstance(sql, str):
+        return names
+    for match in re.finditer(r"\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)", sql, re.IGNORECASE):
+        names.add(match.group(1).strip('"'))
+    for match in re.finditer(r"\bJOIN\s+([A-Za-z_][A-Za-z0-9_]*)", sql, re.IGNORECASE):
+        names.add(match.group(1).strip('"'))
+    return names
+
+
 def _data_source(config: dict) -> None:
     st.markdown('<div class="side-label">Data Source</div>', unsafe_allow_html=True)
 
+    # Only show tables that are actually used by the dashboard config.
+    used_tables = _tables_referenced_in_config(config)
+
     # Data update — only for refreshing previously loaded data, NOT for creating dashboards
-    if has_data():
-        tables = available_tables()
-        if tables:
-            st.markdown(
-                '<p style="font-size:0.75rem; color:var(--body); opacity:0.6; margin:0 0 0.5rem 0;">'
-                "Refresh data from previously loaded files only. "
-                "This does not create a new dashboard."
-                '</p>',
-                unsafe_allow_html=True,
-            )
-            update_table = st.selectbox(
-                "Table to update",
-                tables,
-                key="update_table",
-                help="Select which table's data you want to refresh with a new file.",
-            )
-            st.file_uploader(
-                "Refresh data",
-                type=["csv", "xlsx"],
-                accept_multiple_files=False,
-                key="update_files",
-                on_change=_process_data_update,
-                help="Upload a CSV or Excel with the same columns to update this table's data.",
-            )
-            st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
-
-    # Show all available tables dynamically
-    if has_data():
-        tables = available_tables()
-        if tables:
-            files_lines = ""
-            for t in sorted(tables):
-                label = t.capitalize()
-                file_name = file_in_use(t)
-                files_lines += f"{label}: <b>{file_name}</b><br>"
-        else:
-            files_lines = "No tables found."
-
+    if has_data() and used_tables:
         st.markdown(
-            f"""
-            <span style="background: var(--bg); border:1px solid var(--border); border-radius:10px;
-                        padding:10px 12px; font-size:0.82rem; color: var(--body); line-height:1.7;
-                        display:inline-block;">
-                <span class="mi" style="font-size:0.95rem; vertical-align:-2px;">folder_open</span>
-                <b style="color:var(--head);">Files in use</b>
-                <span style="opacity:0.85; display:block; margin-top:4px;">
-                    {files_lines}
-                </span>
-            </span>
-            """,
+            '<p style="font-size:0.75rem; color:var(--body); opacity:0.6; margin:0 0 0.5rem 0;">'
+            "Refresh data from previously loaded files only. "
+            "This does not create a new dashboard."
+            '</p>',
             unsafe_allow_html=True,
         )
-    
+        update_table = st.selectbox(
+            "Table to update",
+            used_tables,
+            key="update_table",
+            help="Select which table's data you want to refresh with a new file.",
+        )
+        st.file_uploader(
+            "Refresh data",
+            type=["csv", "xlsx"],
+            accept_multiple_files=False,
+            key="update_files",
+            on_change=_process_data_update,
+            help="Upload a CSV or Excel with the same columns to update this table's data.",
+        )
+        st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
+
     st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
 
 
@@ -350,48 +372,28 @@ def _global_filters(config: dict) -> dict:
 
 
 def _pdf_export_button(config: dict, filter_values: dict) -> None:
-    """PDF export button in the sidebar.
+    """PDF export section in the sidebar — currently disabled (unstable).
 
-    Flow: Click 'Generar reporte' → generates PDF with spinner → reruns →
-    shows 'Descargar' button for the browser save dialog.
+    The PDF generation feature exists in the codebase but is not stable yet.
+    The button is disabled and a "coming soon" message is shown instead.
+    See README Roadmap item #4 for the plan to make it stable.
     """
     if not has_data():
         return
 
     st.markdown('<div class="side-label">Export</div>', unsafe_allow_html=True)
-
-    brand = config.get("brand_name", "Dashboard")
-    safe_name = re.sub(r"[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s]", "", brand).strip().replace(" ", "_")
-    file_name = f"{safe_name}.pdf"
-
-    pdf_key = "pdf_bytes_cache"
-
-    # If PDF is already generated, show download button
-    if pdf_key in st.session_state:
-        st.download_button(
-            label="Descargar",
-            data=st.session_state[pdf_key],
-            file_name=file_name,
-            mime="application/pdf",
-            use_container_width=True,
-            type="secondary",
-        )
-        st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
-        return
-
-    # Show generate button
-    clicked = st.button("Generar reporte", use_container_width=True, type="secondary")
-
-    if clicked:
-        with st.spinner("Generando PDF..."):
-            try:
-                from core.pdf_export import generate_pdf
-                st.session_state[pdf_key] = generate_pdf(config, filter_values)
-            except ImportError as exc:
-                st.error(f"No se puede generar el PDF: {exc}")
-                st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
-                return
-        st.rerun()
+    st.button(
+        ":material/lock:  Generar reporte",
+        use_container_width=True,
+        type="secondary",
+        disabled=True,
+        help="La exportación a PDF estará disponible próximamente.",
+    )
+    st.caption(
+        "La exportación a PDF no es estable actualmente. "
+        "Se trabajará en una versión estable próximamente.",
+        unsafe_allow_html=True,
+    )
 
     st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
 

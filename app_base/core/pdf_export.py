@@ -264,6 +264,7 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
     filter_config = config.get("filtros_globales", [])
     modulos = config.get("modulos", [])
     primary_color = config.get("primary_color", "#246bfd")
+    report_title = config.get("report_title", brand_name)
 
     # Parse primary color
     try:
@@ -343,7 +344,7 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
         pdf.set_text_color(148, 163, 184)
         if pdf._footer_text:
             pdf.cell(95, 5, pdf._footer_text, align="L")
-        pdf.cell(95, 5, f"Pagina {pdf.page_no()}", align="R")
+        pdf.cell(95, 5, f"Página {pdf.page_no()}", align="R")
 
     pdf.header = lambda: _custom_header(pdf)
     pdf.footer = lambda: _custom_footer(pdf)
@@ -400,7 +401,7 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
     pdf.set_y(100)
     pdf.set_font(_font_family, "B", size=16)
     pdf.set_text_color(*primary_rgb)
-    pdf.cell(0, 10, "Reporte de Dashboard", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, report_title, align="C", new_x="LMARGIN", new_y="NEXT")
     
     pdf.ln(5)
     pdf.set_font(_font_family, size=10)
@@ -412,7 +413,7 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
     pdf.ln(15)
     pdf.set_font(_font_family, "B", size=12)
     pdf.set_text_color(15, 23, 42)
-    pdf.cell(0, 8, "Contenido", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, config.get("toc_title", "Contenido"), align="C", new_x="LMARGIN", new_y="NEXT")
     
     pdf.ln(3)
     # Separator line
@@ -523,7 +524,7 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
                 pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT")
                 pdf.set_font(_font_family, size=9)
                 pdf.set_text_color(148, 163, 184)
-                pdf.cell(0, 6, "Sin datos", new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(0, 6, config.get("empty_msg", "Sin datos disponibles"), new_x="LMARGIN", new_y="NEXT")
                 pdf.ln(4)
                 continue
 
@@ -604,7 +605,7 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
             else:
                 pdf.set_font(_font_family, size=9)
                 pdf.set_text_color(148, 163, 184)
-                pdf.cell(0, 6, "Grafico no disponible", new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(0, 6, config.get("chart_empty_msg", "Gráfico no disponible"), new_x="LMARGIN", new_y="NEXT")
             
             pdf.ln(3)
 
@@ -630,7 +631,7 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
             if df.empty:
                 pdf.set_font(_font_family, size=9)
                 pdf.set_text_color(148, 163, 184)
-                pdf.cell(0, 6, "Sin datos", new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(0, 6, config.get("empty_msg", "Sin datos disponibles"), new_x="LMARGIN", new_y="NEXT")
                 continue
 
             df_display = df.head(limit)

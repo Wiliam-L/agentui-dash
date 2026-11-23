@@ -409,13 +409,6 @@ section[data-testid="stSidebar"] .stButton > button,
 section[data-testid="stSidebar"] .stDownloadButton > button {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
-/* The button text "picture_as_pdf  Exportar a PDF" and "download  Descargar PDF"
-   contains a Material Icon name followed by two spaces. CSS ::before replaces
-   the icon name text with the actual icon glyph. */
-section[data-testid="stSidebar"] .stButton > button:has(span.pdf-icon),
-section[data-testid="stSidebar"] .stDownloadButton > button:has(span.pdf-icon) {
-    padding-left: 14px;
-}
 
 .stTabs [data-baseweb="tab-list"] { gap: 18px; border-bottom: 1px solid var(--border); }
 .stTabs [data-baseweb="tab"] { font-weight: 600; color: var(--tab-inactive); padding: 8px 2px; }

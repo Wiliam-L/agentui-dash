@@ -101,7 +101,7 @@ Usuario  →  Agente IA  →  MCP Server  →  ui_config.json  →  Streamlit UI
 ## Personalización y entrega al cliente
 
 - **White-label** — cambia `brand_name`, `brand_sub`, `brand_icon` y `footer` en el config para personalizar la marca.
-- **Exportación a PDF** — botón en el sidebar para descargar un reporte PDF con portada, KPIs, gráficos y tablas. El LLM también puede generar el PDF vía la herramienta `export_pdf`.
+- **Exportación a PDF** — la funcionalidad existe en el código pero **no es estable** actualmente. El botón del sidebar está deshabilitado; es necesario adaptarlo para producción.
 - **Actualización de datos** — el dashboard incluye un file uploader para que el cliente actualice los datos sin depender del agente.
 - **Docker** — entrega el dashboard como contenedor aislado: `docker compose up --build`.
 - **Recarga en caliente** — el agente puede modificar KPIs o gráficos en tiempo real sin reiniciar Streamlit.
@@ -127,13 +127,15 @@ Para todas las opciones de instalación (código fuente, Docker, otros clientes 
 - El SQL de KPIs y gráficos viene del agente; `safe_sql()` mitiga riesgos, pero la calidad depende de lo que el agente produzca.
 - El dashboard está diseñado para **archivos de datos relacionados** (mismo dominio). Para archivos no relacionados, el agente debe generar dashboards separados.
 - No hay soporte automático para JOINs entre tablas; el agente puede escribirlos manualmente con `update_config()`.
+- **Exportación a PDF** — la funcionalidad de generar reportes PDF existe en el código base pero **no es estable** en su estado actual. El botón de generación está deshabilitado en la UI; requiere adaptación y pruebas adicionales antes de habilitarlo en producción.
 
 ## Roadmap
 
 1. Workspaces múltiples (aislar dashboards por proyecto).
 2. Fuentes de datos externas (PostgreSQL, MySQL).
 3. Personalización avanzada de temas y layouts.
-4. **Autenticación y acceso seguro** — integrar un reverse proxy (Cloudflare Access o Auth0) para proteger dashboards con login sin modificar código de la app.
+4. **Exportación a PDF estable** — mejorar la funcionalidad de generación de reportes PDF (diálogo de guardado nativo, compatibilidad entre navegadores) y re-habilitar el botón del sidebar.
+5. **Autenticación y acceso seguro** — integrar un reverse proxy (Cloudflare Access o Auth0) para proteger dashboards con login sin modificar código de la app.
 
 ## Licencia
 
