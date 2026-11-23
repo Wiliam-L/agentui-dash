@@ -390,6 +390,7 @@ def generate_ui_config(df_head: pd.DataFrame, table_name: str = "data") -> dict[
         "titulo_pagina": "Dashboard",
         "brand_name": "Dashboard",
         "brand_sub": "",
+        "brand_logo": "ageui-logo.png",
         "brand_icon": "dashboard",
         "column_mapping": column_mapping,
         "filtros_globales": filters,

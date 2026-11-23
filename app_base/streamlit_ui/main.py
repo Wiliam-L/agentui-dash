@@ -46,6 +46,7 @@ DEFAULT_CONFIG = {
     "titulo_pagina": "Dashboard",
     "brand_name": "Dashboard",
     "brand_sub": "",
+    "brand_logo": "ageui-logo.png",
     "filtros_globales": [],
     "modulos": [],
     "sidebar_disclaimer": "",

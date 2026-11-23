@@ -266,13 +266,13 @@ section[data-testid="stSidebar"] * { color: var(--side-text); }
 section[data-testid="stSidebar"] .stMarkdown p { margin-bottom: 0; }
 .brand { display: flex; align-items: center; gap: 12px; padding: 8px 2px 6px; }
 .brand-ic {
-    width: 38px; height: 38px; border-radius: 10px; flex: 0 0 auto;
+    width: 80px; height: 80px; border-radius: 14px; flex: 0 0 auto;
     display: inline-flex; align-items: center; justify-content: center;
-    background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, white)); color: #fff; font-size: 22px;
+    background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, white)); color: #fff; font-size: 42px;
     box-shadow: 0 4px 10px color-mix(in srgb, var(--primary) 25%, transparent);
 }
 .brand-logo-img {
-    width: 38px; height: 38px; border-radius: 10px; flex: 0 0 auto;
+    width: 80px; height: 80px; border-radius: 14px; flex: 0 0 auto;
     object-fit: contain;
 }
 .brand-name { font-size: 1rem; font-weight: 800; color: var(--side-strong); letter-spacing: -.01em; }
