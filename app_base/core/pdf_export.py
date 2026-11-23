@@ -1,21 +1,19 @@
 """PDF export — generates a white-label PDF report from ui_config.json.
 
 Shared module used by both the Streamlit sidebar button and the MCP tool.
-Builds an HTML report with WeasyPrint-friendly styling, exports Plotly charts
-to PNG via Kaleido, and converts the whole document to PDF.
+Builds a PDF directly with FPDF2, exports Plotly charts to PNG via Kaleido,
+and embeds them as images. No system dependencies required — works on any OS.
 
 Dependencies:
-    - weasyprint (HTML → PDF)
+    - fpdf2 (pure Python PDF generation)
     - kaleido (Plotly → PNG, already installed)
 """
 from __future__ import annotations
 
-import base64
 import io
 import logging
 import re
 from datetime import datetime
-from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -165,14 +163,14 @@ def _build_chart_figure(chart_config: dict, df: pd.DataFrame):
     return None
 
 
-def _chart_to_png_base64(chart_config: dict, df: pd.DataFrame) -> str | None:
-    """Export a chart to a base64-encoded PNG string for embedding in HTML."""
+def _chart_to_png(chart_config: dict, df: pd.DataFrame) -> bytes | None:
+    """Export a chart to PNG bytes for embedding in the PDF."""
     fig = _build_chart_figure(chart_config, df)
     if fig is None:
         return None
     try:
         img_bytes = fig.to_image(format="png", scale=2)
-        return base64.b64encode(img_bytes).decode("ascii")
+        return img_bytes
     except Exception as e:
         _logger.warning(f"Failed to export chart to PNG: {e}")
         return None
@@ -198,148 +196,15 @@ def _format_kpi_value(value: Any, fmt: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# HTML template (embedded, no external files)
+# FPDF helpers
 # --------------------------------------------------------------------------- #
 
-HTML_TEMPLATE = """\
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<style>
-  @page {
-    size: A4;
-    margin: 20mm;
-    @bottom-center {
-      content: "Página " counter(page) " de " counter(pages);
-      font-size: 9px;
-      color: #94a3b8;
-    }
-  }
-  body {
-    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
-    color: #0f172a;
-    margin: 0;
-    padding: 0;
-    line-height: 1.5;
-  }
-  .cover {
-    page-break-after: always;
-    text-align: center;
-    padding-top: 80px;
-  }
-  .cover h1 {
-    font-size: 28px;
-    color: #0f172a;
-    margin-bottom: 8px;
-  }
-  .cover .subtitle {
-    font-size: 16px;
-    color: #64748b;
-    margin-bottom: 40px;
-  }
-  .cover .date {
-    font-size: 12px;
-    color: #94a3b8;
-  }
-  .section {
-    page-break-inside: avoid;
-    margin-bottom: 30px;
-  }
-  .section h2 {
-    font-size: 18px;
-    color: #0f172a;
-    border-bottom: 2px solid #246bfd;
-    padding-bottom: 6px;
-    margin-bottom: 16px;
-  }
-  .kpi-row {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
-  }
-  .kpi-card {
-    flex: 1;
-    min-width: 140px;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 14px;
-    text-align: center;
-  }
-  .kpi-card .label {
-    font-size: 11px;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .kpi-card .value {
-    font-size: 22px;
-    font-weight: 700;
-    color: #0f172a;
-    margin: 4px 0;
-  }
-  .kpi-card .sub {
-    font-size: 10px;
-    color: #94a3b8;
-  }
-  .chart-img {
-    width: 100%;
-    max-height: 350px;
-    object-fit: contain;
-    margin: 10px 0;
-  }
-  .chart-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #334155;
-    margin-bottom: 4px;
-  }
-  .chart-subtitle {
-    font-size: 11px;
-    color: #94a3b8;
-    margin-bottom: 8px;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 11px;
-    margin: 10px 0;
-  }
-  th {
-    background: #f1f5f9;
-    color: #334155;
-    font-weight: 600;
-    text-align: left;
-    padding: 8px 10px;
-    border-bottom: 2px solid #e2e8f0;
-  }
-  td {
-    padding: 6px 10px;
-    border-bottom: 1px solid #f1f5f9;
-    color: #475569;
-  }
-  .footer {
-    text-align: center;
-    font-size: 9px;
-    color: #cbd5e1;
-    margin-top: 30px;
-    padding-top: 10px;
-    border-top: 1px solid #f1f5f9;
-  }
-</style>
-</head>
-<body>
-
-{cover}
-
-{sections}
-
-<div class="footer">{footer}</div>
-
-</body>
-</html>
-"""
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    """Convert a hex color string to an RGB tuple."""
+    hex_color = hex_color.lstrip("#")
+    if len(hex_color) == 3:
+        hex_color = "".join(c * 2 for c in hex_color)
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 
 # --------------------------------------------------------------------------- #
@@ -347,7 +212,7 @@ HTML_TEMPLATE = """\
 # --------------------------------------------------------------------------- #
 
 def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
-    """Generate a PDF report from a ui_config.json dict.
+    """Generate a PDF report from a ui_config.json dict using FPDF2.
 
     Args:
         config: The full ui_config.json dictionary.
@@ -360,11 +225,11 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
         raise ValueError("No data available. Ingest a CSV first.")
 
     try:
-        from weasyprint import HTML
+        from fpdf import FPDF
     except ImportError:
         raise ImportError(
-            "weasyprint is required for PDF export. "
-            "Install it with: pip install weasyprint"
+            "fpdf2 is required for PDF export. "
+            "Install it with: pip install fpdf2"
         )
 
     brand_name = config.get("brand_name", "Dashboard")
@@ -372,41 +237,133 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
     footer_text = config.get("footer", "")
     filter_config = config.get("filtros_globales", [])
     modulos = config.get("modulos", [])
+    primary_color = config.get("primary_color", "#246bfd")
+
+    pdf = FPDF(format="A4", unit="mm")
+    pdf.set_auto_page_break(auto=True, margin=20)
+
+    # Use built-in fonts (Helvetica, Times, Courier) available on any OS
+    # For Unicode support (Spanish accents), try to add a system font
+    _font_added = False
+    _font_family = "Helvetica"
+    _font_paths = [
+        # Windows
+        (r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\arialbd.ttf",
+         r"C:\Windows\Fonts\ariali.ttf", r"C:\Windows\Fonts\arialbi.ttf"),
+        # macOS
+        ("/System/Library/Fonts/Helvetica.ttc", None, None, None),
+        # Linux
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
+         "/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf"),
+    ]
+    for regular, bold, italic, bolditalic in _font_paths:
+        if regular and Path(regular).exists():
+            try:
+                pdf.add_font("Arial", "", regular, uni=True)
+                if bold and Path(bold).exists():
+                    pdf.add_font("Arial", "B", bold, uni=True)
+                if italic and Path(italic).exists():
+                    pdf.add_font("Arial", "I", italic, uni=True)
+                if bolditalic and Path(bolditalic).exists():
+                    pdf.add_font("Arial", "BI", bolditalic, uni=True)
+                _font_family = "Arial"
+                _font_added = True
+                break
+            except Exception:
+                continue
+
+    pdf.set_font(_font_family, size=12)
+
+    def _add_page_number(pdf):
+        pdf.set_y(-15)
+        pdf.set_font(_font_family, size=8)
+        pdf.set_text_color(148, 163, 184)
+        pdf.cell(0, 10, f"Pagina {pdf.page_no()}", align="C")
+
+    def _draw_header(pdf, title: str):
+        if primary_color:
+            try:
+                r, g, b = _hex_to_rgb(primary_color)
+            except (ValueError, TypeError):
+                r, g, b = 36, 107, 253
+        else:
+            r, g, b = 36, 107, 253
+        pdf.set_fill_color(r, g, b)
+        pdf.rect(0, 0, 210, 12, "F")
+        pdf.set_y(3)
+        pdf.set_x(10)
+        pdf.set_font(_font_family, "B", size=11)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(0, 6, title, align="L")
 
     # --- Cover page ---
+    pdf.add_page()
+    pdf.ln(40)
+    pdf.set_font(_font_family, "B", size=24)
+    pdf.set_text_color(15, 23, 42)
+    pdf.cell(0, 12, brand_name, align="C", new_x="LMARGIN", new_y="NEXT")
+    if brand_sub:
+        pdf.ln(4)
+        pdf.set_font(_font_family, size=14)
+        pdf.set_text_color(100, 116, 139)
+        pdf.cell(0, 10, brand_sub, align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(20)
     today = datetime.now().strftime("%d/%m/%Y")
-    cover_html = f"""\
-<div class="cover">
-    <h1>{escape(brand_name)}</h1>
-    {f'<div class="subtitle">{escape(brand_sub)}</div>' if brand_sub else ""}
-    <div class="date">Reporte generado el {today}</div>
-</div>
-"""
+    pdf.set_font(_font_family, size=10)
+    pdf.set_text_color(148, 163, 184)
+    pdf.cell(0, 8, f"Reporte generado el {today}", align="C", new_x="LMARGIN", new_y="NEXT")
 
     # --- Sections per module ---
-    sections_html = ""
-
     for mod in modulos:
         mod_name = mod.get("nombre", "Módulo")
-        sections_html += f'<div class="section"><h2>{escape(mod_name)}</h2>'
+        pdf.add_page()
+        _draw_header(pdf, mod_name)
+        pdf.ln(6)
 
         # KPIs
         kpis = mod.get("kpis", [])
         if kpis:
-            kpi_cards = ""
-            for kpi_cfg in kpis:
+            num_kpis = len(kpis)
+            col_width = (190 - (num_kpis - 1) * 5) / num_kpis
+            x_start = 10
+            for i, kpi_cfg in enumerate(kpis):
                 val = execute_kpi(kpi_cfg, filter_config, filter_values)
                 formatted = _format_kpi_value(val, kpi_cfg.get("formato", "number"))
                 label = kpi_cfg.get("label", "")
                 sub_label = kpi_cfg.get("sub_label", "")
-                kpi_cards += f"""\
-<div class="kpi-card">
-    <div class="label">{escape(label)}</div>
-    <div class="value">{escape(formatted)}</div>
-    {f'<div class="sub">{escape(sub_label)}</div>' if sub_label else ""}
-</div>
-"""
-            sections_html += f'<div class="kpi-row">{kpi_cards}</div>'
+
+                x_pos = x_start + i * (col_width + 5)
+                y_pos = pdf.get_y()
+
+                # Card background
+                pdf.set_fill_color(241, 245, 249)
+                pdf.rect(x_pos, y_pos, col_width, 30, "F")
+                pdf.set_draw_color(226, 232, 240)
+                pdf.set_line_width(0.3)
+                pdf.rect(x_pos, y_pos, col_width, 30, "D")
+
+                # Label
+                pdf.set_xy(x_pos + 4, y_pos + 4)
+                pdf.set_font(_font_family, size=7)
+                pdf.set_text_color(100, 116, 139)
+                pdf.multi_cell(col_width - 8, 4, label.upper(), align="C")
+
+                # Value
+                pdf.set_xy(x_pos + 4, pdf.get_y() + 2)
+                pdf.set_font(_font_family, "B", size=14)
+                pdf.set_text_color(15, 23, 42)
+                pdf.multi_cell(col_width - 8, 6, formatted, align="C")
+
+                # Sub label
+                if sub_label:
+                    pdf.set_xy(x_pos + 4, pdf.get_y() + 1)
+                    pdf.set_font(_font_family, size=6)
+                    pdf.set_text_color(148, 163, 184)
+                    pdf.multi_cell(col_width - 8, 3, sub_label, align="C")
+
+            pdf.ln(8)
 
         # Charts
         charts = mod.get("graficos", [])
@@ -417,7 +374,13 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
             # Execute query
             df = execute_query(chart_cfg, filter_config, filter_values)
             if df.empty:
-                sections_html += f'<div class="chart-title">{escape(title)}</div><p style="color:#94a3b8;font-size:11px;">Sin datos</p>'
+                pdf.set_font(_font_family, "B", size=11)
+                pdf.set_text_color(51, 65, 85)
+                pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font(_font_family, size=9)
+                pdf.set_text_color(148, 163, 184)
+                pdf.cell(0, 6, "Sin datos", new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(4)
                 continue
 
             # Apply renames
@@ -433,7 +396,7 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
                     top_values = df[x_col].value_counts().head(top_n).index.tolist()
                     df = df[df[x_col].isin(top_values)]
 
-            # Build chart config for _build_chart_figure
+            # Build chart config
             chart_build_cfg = {
                 "tipo": chart_cfg.get("tipo", "bar"),
                 "alto": chart_cfg.get("alto", 350),
@@ -442,43 +405,103 @@ def generate_pdf(config: dict, filter_values: dict | None = None) -> bytes:
                 if key in chart_cfg:
                     chart_build_cfg[key] = chart_cfg[key]
 
-            png_b64 = _chart_to_png_base64(chart_build_cfg, df)
-            if png_b64:
-                sections_html += f"""\
-<div class="chart-title">{escape(title)}</div>
-{f'<div class="chart-subtitle">{escape(subtitle)}</div>' if subtitle else ""}
-<img class="chart-img" src="data:image/png;base64,{png_b64}" alt="{escape(title)}">
-"""
+            # Title
+            pdf.set_font(_font_family, "B", size=11)
+            pdf.set_text_color(51, 65, 85)
+            pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT")
+            if subtitle:
+                pdf.set_font(_font_family, size=8)
+                pdf.set_text_color(148, 163, 184)
+                pdf.cell(0, 6, subtitle, new_x="LMARGIN", new_y="NEXT")
+
+            # Chart image
+            png_bytes = _chart_to_png(chart_build_cfg, df)
+            if png_bytes:
+                # Check if we need a new page for the chart
+                available_height = pdf.h - pdf.get_y() - 20
+                if available_height < 60:
+                    pdf.add_page()
+                    _draw_header(pdf, mod_name)
+
+                img_x = pdf.get_x()
+                img_y = pdf.get_y()
+                img_width = 180
+                # Estimate height maintaining aspect ratio (PNG is 2x scale)
+                try:
+                    from PIL import Image
+                    img = Image.open(io.BytesIO(png_bytes))
+                    aspect = img.size[1] / img.size[0]
+                    img_height = img_width * aspect
+                except Exception:
+                    img_height = 90
+
+                # Cap height to fit on page
+                max_height = pdf.h - img_y - 25
+                if img_height > max_height:
+                    img_height = max_height
+                    img_width = img_height / aspect if 'aspect' in dir() else 180
+
+                pdf.image(png_bytes, x=img_x + 5, y=img_y, w=img_width)
+                pdf.set_y(img_y + img_height + 6)
             else:
-                sections_html += f'<div class="chart-title">{escape(title)}</div><p style="color:#94a3b8;font-size:11px;">Gráfico no disponible</p>'
+                pdf.set_font(_font_family, size=9)
+                pdf.set_text_color(148, 163, 184)
+                pdf.cell(0, 6, "Grafico no disponible", new_x="LMARGIN", new_y="NEXT")
 
         # Tables
         tables = mod.get("tablas", [])
         for table_cfg in tables:
             t_title = table_cfg.get("titulo", "Tabla")
-            sections_html += f'<div class="chart-title">{escape(t_title)}</div>'
+            pdf.set_font(_font_family, "B", size=11)
+            pdf.set_text_color(51, 65, 85)
+            pdf.cell(0, 8, t_title, new_x="LMARGIN", new_y="NEXT")
+
             df = execute_query(table_cfg, filter_config, filter_values)
             limit = table_cfg.get("limite", 50)
-            if not df.empty:
-                df_display = df.head(limit)
-                # Convert DataFrame to HTML table
-                table_html = df_display.to_html(escape=True, index=False, border=0)
-                sections_html += table_html
-            else:
-                sections_html += '<p style="color:#94a3b8;font-size:11px;">Sin datos</p>'
+            if df.empty:
+                pdf.set_font(_font_family, size=9)
+                pdf.set_text_color(148, 163, 184)
+                pdf.cell(0, 6, "Sin datos", new_x="LMARGIN", new_y="NEXT")
+                continue
 
-        sections_html += '</div>'  # .section
+            df_display = df.head(limit)
+            cols = list(df_display.columns)
+            num_cols = len(cols)
+            col_w = 190 / num_cols
 
-    # --- Assemble full HTML ---
-    full_html = HTML_TEMPLATE.format(
-        cover=cover_html,
-        sections=sections_html,
-        footer=escape(footer_text) if footer_text else "",
-    )
+            # Header row
+            pdf.set_fill_color(241, 245, 249)
+            pdf.set_font(_font_family, "B", size=7)
+            pdf.set_text_color(51, 65, 85)
+            for col in cols:
+                pdf.cell(col_w, 6, str(col), border=1, fill=True, align="C", new_x="RIGHT")
+            pdf.ln()
 
-    # --- Convert to PDF ---
-    pdf_bytes = HTML(string=full_html).write_pdf()
-    return pdf_bytes
+            # Data rows
+            pdf.set_font(_font_family, size=7)
+            pdf.set_text_color(71, 85, 105)
+            for _, row in df_display.iterrows():
+                for j, col in enumerate(cols):
+                    val = str(row[col]) if pd.notna(row[col]) else ""
+                    # Truncate long values
+                    if len(val) > 25:
+                        val = val[:22] + "..."
+                    pdf.cell(col_w, 5, val, border=1, align="C", new_x="RIGHT")
+                pdf.ln()
+
+            pdf.ln(4)
+
+    # --- Footer on last page ---
+    if footer_text:
+        pdf.ln(6)
+        pdf.set_font(_font_family, size=7)
+        pdf.set_text_color(203, 213, 225)
+        pdf.cell(0, 6, footer_text, align="C", new_x="LMARGIN", new_y="NEXT")
+
+    # Output PDF bytes
+    output = io.BytesIO()
+    pdf.output(output)
+    return output.getvalue()
 
 
 def generate_pdf_to_file(config: dict, output_path: str | Path, filter_values: dict | None = None) -> Path:
