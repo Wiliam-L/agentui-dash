@@ -8,13 +8,15 @@ MATERIAL_ICONS_LINK = (
 )
 
 
-def chart_colors() -> dict:
+def chart_colors(primary_color: str = "#2563eb") -> dict:
+    """Return chart color defaults derived from the primary color."""
     return {
-        "paper": "rgba(0,0,0,0)",
-        "plot": "rgba(0,0,0,0)",
+        "paper": "#ffffff",
+        "plot": "#ffffff",
         "grid": "#e2e8f0",
         "font": "#334155",
         "line": "#cbd5e1",
+        "primary": primary_color,
     }
 
 
@@ -70,6 +72,64 @@ PALETTE = [
     "#e11d48",
     "#6366f1",
 ]
+
+
+def _hex_to_hsl(hex_color: str) -> tuple:
+    """Convert hex color to (H, S, L) values."""
+    safe = hex_color.lstrip("#")
+    if len(safe) == 3:
+        safe = safe[0]*2 + safe[1]*2 + safe[2]*2
+    r, g, b = int(safe[0:2], 16)/255, int(safe[2:4], 16)/255, int(safe[4:6], 16)/255
+    c_max, c_min = max(r, g, b), min(r, g, b)
+    l = (c_max + c_min) / 2
+    if c_max == c_min:
+        h, s = 0, 0
+    else:
+        d = c_max - c_min
+        s = d / (2 - c_max - c_min) if l > 0.5 else d / (c_max + c_min)
+        if c_max == r:
+            h = ((g - b) / d) % 6
+        elif c_max == g:
+            h = (b - r) / d + 2
+        else:
+            h = (r - g) / d + 4
+        h *= 60
+        if h < 0:
+            h += 360
+    return h, s, l
+
+
+def _hsl_to_hex(h: float, s: float, l: float) -> str:
+    """Convert HSL to hex color."""
+    if s == 0:
+        r = g = b = l
+    else:
+        def hue2rgb(p, q, t):
+            if t < 0: t += 1
+            if t > 1: t -= 1
+            if t < 1/6: return p + (q - p) * 6 * t
+            if t < 1/2: return q
+            if t < 2/3: return p + (q - p) * (2/3 - t) * 6
+            return p
+        q = l * (1 + s) if l < 0.5 else l + s - l * s
+        p = 2 * l - q
+        h_norm = h / 360
+        r = hue2rgb(p, q, h_norm + 1/3)
+        g = hue2rgb(p, q, h_norm)
+        b = hue2rgb(p, q, h_norm - 1/3)
+    return f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+
+
+def derive_palette(primary_color: str) -> list:
+    """Derive a 10-color palette from a primary color using hue rotation.
+
+    Returns a list of hex colors that share the same saturation/lightness
+    as the primary, rotated around the color wheel for variety.
+    """
+    h, s, l = _hex_to_hsl(primary_color)
+    # Rotate hue to get complementary and analogous colors
+    rotations = [0, 30, 60, 120, 180, 210, 240, 270, 300, 330]
+    return [_hsl_to_hex((h + r) % 360, s, l) for r in rotations]
 
 
 def _css_body() -> str:
@@ -140,6 +200,10 @@ div.block-container { padding-top: 1.6rem; padding-bottom: 2.5rem; max-width: 10
     margin-bottom: 18px;
 }
 .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.card-body { }
+
+/* Plotly charts: white background is set directly in components.py via paper_bgcolor/plot_bgcolor.
+   No extra CSS wrapper needed — let Plotly render cleanly inside the card. */
 .card-title { font-size: 1.05rem; font-weight: 700; color: var(--head); letter-spacing: -.01em; }
 .card-sub { font-size: .85rem; color: var(--muted); margin-top: 2px; }
 .mi {
@@ -190,8 +254,8 @@ div.block-container { padding-top: 1.6rem; padding-bottom: 2.5rem; max-width: 10
 .page-title .pt-ic {
     width: 46px; height: 46px; border-radius: 12px; flex: 0 0 auto;
     display: inline-flex; align-items: center; justify-content: center;
-    background: linear-gradient(135deg,#2563eb,#60a5fa); color: #fff; font-size: 24px;
-    box-shadow: 0 4px 12px rgba(37,99,235,.2);
+    background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 60%, white)); color: #fff; font-size: 24px;
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 .page-title h1 { font-size: 1.6rem; font-weight: 800; color: var(--head); margin: 0; letter-spacing: -.02em; }
 .breadcrumb { color: var(--muted); font-size: .82rem; letter-spacing: .05em; margin-bottom: 4px; }
@@ -204,8 +268,8 @@ section[data-testid="stSidebar"] .stMarkdown p { margin-bottom: 0; }
 .brand-ic {
     width: 38px; height: 38px; border-radius: 10px; flex: 0 0 auto;
     display: inline-flex; align-items: center; justify-content: center;
-    background: linear-gradient(135deg,#2563eb,#38bdf8); color: #fff; font-size: 22px;
-    box-shadow: 0 4px 10px rgba(37,99,235,.25);
+    background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, white)); color: #fff; font-size: 22px;
+    box-shadow: 0 4px 10px color-mix(in srgb, var(--primary) 25%, transparent);
 }
 .brand-logo-img {
     width: 38px; height: 38px; border-radius: 10px; flex: 0 0 auto;
@@ -228,7 +292,7 @@ section[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
     background: var(--side-focus-bg); color: var(--side-strong);
     box-shadow: inset 0 0 0 1px var(--side-focus-border);
 }
-section[data-testid="stSidebar"] [role="radiogroup"] input { accent-color: #2563eb; }
+section[data-testid="stSidebar"] [role="radiogroup"] input { accent-color: var(--primary); }
 
 section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
     color: var(--side-muted); font-size: .78rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
@@ -330,6 +394,7 @@ div[data-baseweb="input"] > div, div[data-baseweb="textarea"] > div { border-rad
 .stButton > button, .stDownloadButton > button {
     border-radius: 9px; border: 1px solid var(--border);
     background: var(--card); color: var(--head); font-weight: 500; padding: .5rem 1rem;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
 .stButton > button:hover, .stDownloadButton > button:hover { border-color: var(--primary); color: var(--primary); }
 section[data-testid="stSidebar"] .stButton > button, section[data-testid="stSidebar"] .stDownloadButton > button {
@@ -337,6 +402,19 @@ section[data-testid="stSidebar"] .stButton > button, section[data-testid="stSide
 }
 section[data-testid="stSidebar"] .stButton > button:hover {
     border-color: var(--primary); color: var(--side-strong);
+}
+
+/* Material Icons in sidebar buttons: convert icon names to actual icons */
+section[data-testid="stSidebar"] .stButton > button,
+section[data-testid="stSidebar"] .stDownloadButton > button {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+/* The button text "picture_as_pdf  Exportar a PDF" and "download  Descargar PDF"
+   contains a Material Icon name followed by two spaces. CSS ::before replaces
+   the icon name text with the actual icon glyph. */
+section[data-testid="stSidebar"] .stButton > button:has(span.pdf-icon),
+section[data-testid="stSidebar"] .stDownloadButton > button:has(span.pdf-icon) {
+    padding-left: 14px;
 }
 
 .stTabs [data-baseweb="tab-list"] { gap: 18px; border-bottom: 1px solid var(--border); }

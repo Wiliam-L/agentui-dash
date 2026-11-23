@@ -1,10 +1,11 @@
 """Shared visual components (KPI cards, page headers, chart styling)."""
 import re
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from ..styles import chart_colors, PALETTE
+from ..styles import chart_colors, PALETTE, derive_palette
 
 
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{3,8}$")
@@ -33,6 +34,7 @@ def page_header(icon: str, title: str, ruta: str, description: str) -> None:
 
 
 def open_card(title: str, subtitle: str = None, icon: str = "insights") -> str:
+    """Generate the opening HTML for a card (header + body start)."""
     head = (
         f'<div class="card-head"><span class="chip-ic"><span class="mi">{icon}</span></span>'
         f'<div><div class="card-title">{title}</div>'
@@ -43,6 +45,7 @@ def open_card(title: str, subtitle: str = None, icon: str = "insights") -> str:
 
 
 def close_card() -> str:
+    """Generate the closing HTML for a card."""
     return "</div></div>"
 
 
@@ -84,12 +87,12 @@ def badge(icon: str, text: str) -> str:
     return f'<span class="badge"><span class="mi">{icon}</span> {text}</span>'
 
 
-def style_chart(fig, height: int = 330, hover: str = None):
-    colors = chart_colors()
+def style_chart(fig, height: int = 330, hover: str = None, primary_color: str = "#2563eb"):
+    colors = chart_colors(primary_color)
     fig.update_layout(
         height=height,
-        paper_bgcolor=colors["paper"],
-        plot_bgcolor=colors["plot"],
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
         font=dict(
             family="-apple-system, Segoe UI, Roboto, sans-serif",
             color=colors["font"],
@@ -119,7 +122,7 @@ def style_chart(fig, height: int = 330, hover: str = None):
 # --------------------------------------------------------------------------- #
 # Dynamic chart renderer — reads JSON config and dispatches to Plotly
 # --------------------------------------------------------------------------- #
-def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
+def render_chart(chart_config: dict, df: pd.DataFrame, palette: list | None = None, primary_color: str = "#2563eb") -> None:
     """Render a Plotly chart from a JSON config dict and DataFrame.
 
     Supports chart types: bar, pie, line, scatter, bar_h, heatmap,
@@ -134,6 +137,9 @@ def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
       - titulo: chart title (displayed in card header, not used here)
       - alto: figure height (default 350)
     """
+    if palette is None:
+        palette = derive_palette(primary_color) if primary_color else PALETTE
+
     if df.empty:
         return
 
@@ -153,7 +159,7 @@ def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
         else:
             color_col = color_raw  # treat as column name for grouping
             fig = px.bar(df, x=x, y=y, color=color_col,
-                         color_discrete_sequence=PALETTE)
+                         color_discrete_sequence=palette)
             show_legend = bool(color_col)
         fig.update_traces(marker_line_width=0,
                           hovertemplate="<b>%{x}</b><br>%{y:$,.2f}<extra></extra>")
@@ -173,11 +179,11 @@ def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
             show_legend = False
         elif color_raw:
             fig = px.bar(df, x=x, y=y, orientation="h", color=color_raw,
-                         color_discrete_sequence=PALETTE)
+                         color_discrete_sequence=palette)
             show_legend = True
         else:
             fig = px.bar(df, x=x, y=y, orientation="h",
-                         color_discrete_sequence=PALETTE)
+                         color_discrete_sequence=palette)
             show_legend = False
         fig.update_traces(marker_line_width=0,
                           hovertemplate="<b>%{y}</b><br>%{x:$,.2f}<extra></extra>")
@@ -191,7 +197,7 @@ def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
         if not columna or not valores:
             return
         fig = px.pie(df, names=columna, values=valores, hole=0.58,
-                     color_discrete_sequence=PALETTE)
+                     color_discrete_sequence=palette)
         fig.update_traces(textinfo="percent", textposition="inside",
                           textfont=dict(color="white", size=12),
                           hovertemplate="<b>%{label}</b><br>%{value:$,.2f} · %{percent}<extra></extra>")
@@ -209,7 +215,7 @@ def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
             show_legend = False
         else:
             fig = px.line(df, x=x, y=y, color=color_raw,
-                          color_discrete_sequence=PALETTE)
+                          color_discrete_sequence=palette)
             show_legend = bool(color_raw)
         style_chart(fig, height=alto)
         fig.update_layout(showlegend=show_legend, xaxis=dict(title=""), yaxis=dict(title=""))
@@ -227,7 +233,7 @@ def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
                              color_discrete_sequence=[color_raw], opacity=0.8)
         else:
             fig = px.scatter(df, x=x, y=y, color=color_raw, size=size,
-                             color_discrete_sequence=PALETTE, opacity=0.8)
+                             color_discrete_sequence=palette, opacity=0.8)
         fig.update_traces(marker=dict(line=dict(width=1, color="#ffffff")),
                           hovertemplate="<b>%{color}</b><br>%{x:,.0f}<br>%{y:.1f}<extra></extra>")
         style_chart(fig, height=alto)
@@ -241,10 +247,12 @@ def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
         if not x or not y or not valores:
             return
         cruz = pd.pivot_table(df, index=y, columns=x, values=valores, aggfunc="sum").fillna(0)
+        heatmap_color = primary_color if primary_color else "#2563eb"
         fig = px.imshow(cruz, text_auto=True, aspect="auto",
-                        color_continuous_scale=["#e0f2fe", "#246bfd"])
+                        color_continuous_scale=["#e0f2fe", heatmap_color])
         fig.update_layout(height=alto, margin=dict(l=10, r=10, t=8, b=10),
-                          paper_bgcolor="rgba(0,0,0,0)",
+                          paper_bgcolor="#ffffff",
+                          plot_bgcolor="#ffffff",
                           font=dict(color="#334155", size=12))
         fig.update_traces(textfont=dict(color="#0f172a"))
         fig.update_xaxes(title="")
@@ -262,7 +270,7 @@ def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
                          color_discrete_sequence=[color_raw])
         else:
             fig = px.bar(df, x=x, y=y, color=color_raw, barmode="group",
-                         color_discrete_sequence=PALETTE)
+                         color_discrete_sequence=palette)
         fig.update_traces(hovertemplate="<b>%{x}</b><br>%{color}: %{y:,}<extra></extra>")
         style_chart(fig, height=alto)
         fig.update_layout(xaxis=dict(title=""), yaxis=dict(title=""))
@@ -279,7 +287,7 @@ def render_chart(chart_config: dict, df: pd.DataFrame) -> None:
                          color_discrete_sequence=[color_raw])
         else:
             fig = px.bar(df, x=x, y=y, color=color_raw, barmode="stack",
-                         color_discrete_sequence=PALETTE)
+                         color_discrete_sequence=palette)
         fig.update_traces(hovertemplate="<b>%{x}</b><br>%{color}: %{y:,}<extra></extra>")
         style_chart(fig, height=alto)
         fig.update_layout(xaxis=dict(title=""), yaxis=dict(title=""))

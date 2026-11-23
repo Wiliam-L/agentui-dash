@@ -361,7 +361,43 @@ def _pdf_export_button(config: dict, filter_values: dict) -> None:
 
     st.markdown('<div class="side-label">Export</div>', unsafe_allow_html=True)
 
-    if st.button("📄 Exportar a PDF", use_container_width=True):
+    # Inject a small script that replaces icon names in button text with
+    # actual Material Icons glyphs. This runs once after the page loads.
+    st.markdown(r"""
+<script>
+(function() {
+    function fixPdfButtons() {
+        var sidebar = document.querySelector('section[data-testid="stSidebar"]');
+        if (!sidebar) return;
+        sidebar.querySelectorAll('.stButton button, .stDownloadButton button').forEach(function(btn) {
+            if (btn.dataset.pdfFixed) return;
+            var text = btn.textContent;
+            var match = text.match(/^(picture_as_pdf|download)\s{2,}/);
+            if (match) {
+                btn.dataset.pdfFixed = '1';
+                var iconSpan = document.createElement('span');
+                iconSpan.className = 'mi';
+                iconSpan.style.cssText = 'font-size:18px;vertical-align:middle;margin-right:4px;';
+                iconSpan.textContent = match[1];
+                btn.textContent = text.replace(match[1] + '  ', '');
+                btn.insertBefore(iconSpan, btn.firstChild);
+            }
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fixPdfButtons);
+    } else {
+        fixPdfButtons();
+    }
+    var observer = new MutationObserver(fixPdfButtons);
+    observer.observe(document.body, { childList: true, subtree: true });
+})();
+</script>
+""", unsafe_allow_html=True)
+
+    clicked = st.button("picture_as_pdf  Exportar a PDF", use_container_width=True, type="secondary")
+
+    if clicked:
         try:
             from core.pdf_export import generate_pdf
         except ImportError as exc:
@@ -377,11 +413,12 @@ def _pdf_export_button(config: dict, filter_values: dict) -> None:
         file_name = f"{safe_name}.pdf"
 
         st.download_button(
-            label="⬇️ Descargar PDF",
+            label="download  Descargar PDF",
             data=pdf_bytes,
             file_name=file_name,
             mime="application/pdf",
             use_container_width=True,
+            type="secondary",
         )
 
     st.markdown('<div class="side-sep"></div>', unsafe_allow_html=True)
@@ -443,7 +480,7 @@ def main():
     filter_config = config.get("filtros_globales", [])
 
     # Render the module dynamically — everything from JSON
-    render_modulo(modulo_config, filter_config=filter_config, filter_values=filter_values)
+    render_modulo(modulo_config, filter_config=filter_config, filter_values=filter_values, primary_color=primary_color)
 
     # Footer — dynamic from config
     footer_text = config.get("footer", "")

@@ -13,4 +13,5 @@ maxUploadSize = 20000
 gatherUsageStats = false
 
 [client]
-toolbarMode = "viewer"
+toolbarMode = "minimal"
+

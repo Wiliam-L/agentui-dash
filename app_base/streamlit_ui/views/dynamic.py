@@ -22,6 +22,7 @@ from .components import (
     open_card,
     render_chart,
 )
+from ..styles import derive_palette, PALETTE as DEFAULT_PALETTE
 from core.data import error_count, last_error
 from core.tools import execute_kpi, execute_query, get_filter_options, get_date_range
 
@@ -63,13 +64,14 @@ def _build_sub_label(kpi_config: dict, filter_config, filter_values) -> str:
 
 
 def render(modulo_config: dict, filter_config: list[dict] | None = None,
-           filter_values: dict | None = None) -> None:
+           filter_values: dict | None = None, primary_color: str | None = None) -> None:
     """Render a complete module page from JSON config.
 
     Args:
         modulo_config: The module dict from ui_config.json['modulos'].
         filter_config: Global filter definitions (for WHERE clause injection).
         filter_values: User-selected filter values.
+        primary_color: Hex color for the dashboard theme.
     """
     mod_id = modulo_config.get("id", "unknown")
     name = modulo_config.get("nombre", mod_id)
@@ -113,15 +115,15 @@ def render(modulo_config: dict, filter_config: list[dict] | None = None,
             izq, der = st.columns([col_izq, col_der])
 
             with izq:
-                _render_single_chart(g, filter_config, filter_values)
+                _render_single_chart(g, filter_config, filter_values, primary_color)
 
             with der:
-                _render_single_chart(g2, filter_config, filter_values)
+                _render_single_chart(g2, filter_config, filter_values, primary_color)
 
             i += 2
         else:
             # Full-width chart
-            _render_single_chart(g, filter_config, filter_values)
+            _render_single_chart(g, filter_config, filter_values, primary_color)
             i += 1
 
         if i < len(charts):
@@ -147,11 +149,11 @@ def render(modulo_config: dict, filter_config: list[dict] | None = None,
     # A failing query used to degrade silently into "$0 / empty chart".
     # Surface it once per page so the demo never looks broken for no reason.
     if error_count() != errors_before:
-        with st.expander("⚠️ Some queries in this module failed", expanded=False):
+        with st.expander("Some queries in this module failed", expanded=False):
             st.code(last_error() or "Unknown SQL error")
 
 
-def _render_single_chart(g: dict, filter_config, filter_values) -> None:
+def _render_single_chart(g: dict, filter_config, filter_values, primary_color: str | None = None) -> None:
     """Render a single chart card with data from SQL."""
     title = g.get("titulo", "Chart")
     subtitle = g.get("sub", "")
@@ -189,5 +191,6 @@ def _render_single_chart(g: dict, filter_config, filter_values) -> None:
         if key in g:
             chart_config[key] = g[key]
 
-    render_chart(chart_config, df)
+    palette = derive_palette(primary_color) if primary_color else DEFAULT_PALETTE
+    render_chart(chart_config, df, palette=palette, primary_color=primary_color)
     st.markdown(close_card(), unsafe_allow_html=True)
